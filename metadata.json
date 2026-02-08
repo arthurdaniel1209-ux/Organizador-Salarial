@@ -1,0 +1,5 @@
+{
+  "name": "Organizador de Salário",
+  "description": "Um aplicativo web para ajudar a organizar seu salário mensal, alocando fundos para diferentes categorias de despesas e visualizando seu orçamento.",
+  "requestFramePermissions": []
+}
