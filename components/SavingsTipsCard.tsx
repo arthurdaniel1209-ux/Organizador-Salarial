@@ -44,19 +44,16 @@ const SavingsTipsCard: React.FC<SavingsTipsCardProps> = ({ totalIncome, fixedExp
             ? oneTimeExpenses.map(e => `- ${e.name}: R$${e.value.toFixed(2)}`).join('\n')
             : "Nenhuma despesa pontual.";
 
-        const prompt = `
-            Você é um consultor financeiro amigável e prestativo. Analise os seguintes dados financeiros de um usuário no Brasil:
+        const userPrompt = `
+            Analise os seguintes dados financeiros e gere 3 dicas de economia personalizadas, curtas e acionáveis. As dicas devem ser relevantes para a situação financeira. Por exemplo, se os gastos com 'Lazer' são altos, sugira alternativas mais baratas. Se o saldo restante é baixo, dê dicas para economizar em despesas essenciais. Se o saldo for alto, sugira como investir melhor.
 
+            Dados Financeiros:
             - Renda Mensal Total: R$${totalIncome.toFixed(2)}
             - Despesas Fixas:
             ${formatFixedExpenses}
             - Despesas Pontuais:
             ${formatOneTimeExpenses}
             - Saldo Restante: R$${remainingBalance.toFixed(2)}
-
-            Com base nesses dados, gere 3 dicas de economia personalizadas, curtas e acionáveis. As dicas devem ser relevantes para a situação financeira do usuário. Por exemplo, se os gastos com 'Lazer' são altos, sugira alternativas mais baratas. Se o saldo restante é baixo, dê dicas para economizar em despesas essenciais. Se o saldo for alto, sugira como investir melhor.
-
-            Seu retorno deve ser exclusivamente um objeto JSON, sem nenhum texto ou formatação adicional.
         `;
 
         const schema = {
@@ -67,8 +64,8 @@ const SavingsTipsCard: React.FC<SavingsTipsCardProps> = ({ totalIncome, fixedExp
                     items: {
                         type: Type.OBJECT,
                         properties: {
-                            title: { type: Type.STRING, description: 'O título da dica.' },
-                            description: { type: Type.STRING, description: 'A descrição detalhada da dica.' },
+                            title: { type: Type.STRING, description: 'O título conciso da dica.' },
+                            description: { type: Type.STRING, description: 'A descrição detalhada da dica (1-2 frases).' },
                         },
                         required: ['title', 'description'],
                     },
@@ -79,25 +76,38 @@ const SavingsTipsCard: React.FC<SavingsTipsCardProps> = ({ totalIncome, fixedExp
         
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
-            contents: prompt,
+            contents: userPrompt,
             config: {
+                systemInstruction: "Você é um consultor financeiro para usuários no Brasil. Sua resposta deve ser exclusivamente um objeto JSON, seguindo o schema fornecido, sem nenhum texto, comentários ou formatação markdown adicional.",
                 responseMimeType: 'application/json',
                 responseSchema: schema,
             },
         });
 
-        const jsonText = response.text.trim();
+        const textResponse = response.text;
+        if (!textResponse) {
+            throw new Error("A IA não retornou uma resposta de texto.");
+        }
+
+        let jsonText = textResponse.trim();
+        // Remove markdown fences if the model adds them by mistake
+        if (jsonText.startsWith("```json")) {
+            jsonText = jsonText.slice(7, -3).trim();
+        } else if (jsonText.startsWith("```")) {
+            jsonText = jsonText.slice(3, -3).trim();
+        }
+        
         const parsedJson = JSON.parse(jsonText);
         
         if (parsedJson.tips && parsedJson.tips.length > 0) {
             setTips(parsedJson.tips);
             setCurrentTipIndex(0);
         } else {
-            setError("Não foi possível gerar dicas. Tente novamente.");
+            setError("Não foi possível extrair dicas da resposta da IA. Tente novamente.");
         }
 
     } catch (e) {
-        setError("Ocorreu um erro ao buscar as dicas. Verifique sua conexão ou tente mais tarde.");
+        setError("Ocorreu um erro ao gerar as dicas. Verifique sua conexão ou tente mais tarde.");
     } finally {
         setLoading(false);
     }
@@ -118,26 +128,26 @@ const SavingsTipsCard: React.FC<SavingsTipsCardProps> = ({ totalIncome, fixedExp
         </div>
       </div>
 
-      <div className="space-y-3 min-h-[120px]">
+      <div className="space-y-3 min-h-[120px] flex flex-col justify-center">
         {loading && (
-          <div className="flex justify-center items-center h-full text-center">
+          <div className="text-center">
             <p className="text-gray-500 animate-pulse">Analisando suas finanças e gerando dicas personalizadas...</p>
           </div>
         )}
         {error && !loading && (
-          <div className="flex justify-center items-center h-full text-center p-2 bg-red-50 rounded-md">
+          <div className="text-center p-2 bg-red-50 rounded-md">
             <p className="text-red-600 text-sm">{error}</p>
           </div>
         )}
         {!loading && !error && currentTip && (
-           <div className="space-y-2">
+           <div className="space-y-2 text-left">
               <h3 className="font-bold text-gray-800">{currentTip.title}</h3>
               <p className="text-gray-600 text-sm">{currentTip.description}</p>
           </div>
         )}
         {!loading && !error && tips.length === 0 && (
-          <div className="flex justify-center items-center h-full text-center">
-            <p className="text-gray-500 text-sm">Receba dicas de economia personalizadas com base no seu orçamento.</p>
+          <div className="text-center">
+            <p className="text-gray-500 text-sm">Clique no botão abaixo para receber dicas de economia personalizadas com base no seu orçamento.</p>
           </div>
         )}
       </div>
@@ -145,10 +155,10 @@ const SavingsTipsCard: React.FC<SavingsTipsCardProps> = ({ totalIncome, fixedExp
       <div className="mt-4 flex items-center gap-3">
         <button
           onClick={generateTips}
-          disabled={loading}
-          className="flex-grow px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-wait"
+          disabled={loading || totalIncome <= 0}
+          className="flex-grow px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
         >
-          {loading ? 'Analisando...' : 'Gerar Novas Dicas'}
+          {loading ? 'Analisando...' : (tips.length > 0 ? 'Gerar Novas Dicas' : 'Analisar e Gerar Dicas')}
         </button>
         {tips.length > 1 && !loading && (
           <button 
