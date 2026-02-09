@@ -6,10 +6,11 @@ import BudgetChart from './components/BudgetChart';
 import SummaryCard from './components/SummaryCard';
 import BalanceProjectionChart from './components/BalanceProjectionChart';
 import IconPickerModal from './components/IconPickerModal';
+import SavingsTipsCard from './components/SavingsTipsCard';
 import { WalletIcon, MoneyBillIcon, BalanceIcon, ResetIcon, PlusIcon, CloseIcon, WarningIcon, PencilIcon, TrashIcon } from './components/icons';
 
 const App: React.FC = () => {
-  const [salary, setSalary] = useState<number>(3000);
+  const [salary, setSalary] = useState<number>(0);
   const [fixedExpenses, setFixedExpenses] = useState<Expense[]>(INITIAL_EXPENSES);
   const [oneTimeExpenses, setOneTimeExpenses] = useState<OneTimeExpense[]>([]);
   const [oneTimeGains, setOneTimeGains] = useState<OneTimeGain[]>([]);
@@ -27,10 +28,10 @@ const App: React.FC = () => {
   const [newGoalDeadline, setNewGoalDeadline] = useState('');
   
   const [newOneTimeName, setNewOneTimeName] = useState('');
-  const [newOneTimeValue, setNewOneTimeValue] = useState<number | ''>('');
+  const [newOneTimeValue, setNewOneTimeValue] = useState<string>('');
 
   const [newOneTimeGainName, setNewOneTimeGainName] = useState('');
-  const [newOneTimeGainValue, setNewOneTimeGainValue] = useState<number | ''>('');
+  const [newOneTimeGainValue, setNewOneTimeGainValue] = useState<string>('');
 
   const [projectionPeriod, setProjectionPeriod] = useState<number>(6);
 
@@ -121,7 +122,7 @@ const App: React.FC = () => {
   };
   
   const resetBudget = useCallback(() => {
-    setSalary(3000);
+    setSalary(0);
     setFixedExpenses(INITIAL_EXPENSES);
     setOneTimeExpenses([]);
     setOneTimeGains([]);
@@ -217,11 +218,12 @@ const App: React.FC = () => {
   
   const handleAddOneTimeExpense = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newOneTimeName.trim() && newOneTimeValue > 0) {
+    const numericValue = parseFloat(newOneTimeValue);
+    if (newOneTimeName.trim() && !isNaN(numericValue) && numericValue > 0) {
       const newExpense: OneTimeExpense = {
         id: new Date().toISOString(),
         name: newOneTimeName,
-        value: newOneTimeValue as number,
+        value: numericValue,
       };
       setOneTimeExpenses([...oneTimeExpenses, newExpense]);
       setNewOneTimeName('');
@@ -235,11 +237,12 @@ const App: React.FC = () => {
   
   const handleAddOneTimeGain = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newOneTimeGainName.trim() && newOneTimeGainValue > 0) {
+    const numericValue = parseFloat(newOneTimeGainValue);
+    if (newOneTimeGainName.trim() && !isNaN(numericValue) && numericValue > 0) {
         const newGain: OneTimeGain = {
             id: new Date().toISOString(),
             name: newOneTimeGainName,
-            value: newOneTimeGainValue as number,
+            value: numericValue,
         };
         setOneTimeGains([...oneTimeGains, newGain]);
         setNewOneTimeGainName('');
@@ -294,8 +297,10 @@ const App: React.FC = () => {
                         id="salary"
                         value={salary}
                         onChange={handleSalaryChange}
+                        onFocus={(e) => { if (e.target.value === '0') e.target.value = ''; }}
+                        onBlur={(e) => { if (e.target.value === '') setSalary(0); }}
                         className="w-full pl-10 pr-4 py-2 text-md bg-gray-50 border border-gray-300 focus:border-blue-500 focus:ring-0 rounded-md transition"
-                        placeholder="3000"
+                        placeholder="0"
                       />
                     </div>
                   </div>
@@ -303,7 +308,7 @@ const App: React.FC = () => {
                     <label className="block text-sm font-medium mb-1 text-gray-600">Ganhos Pontuais</label>
                     <form onSubmit={handleAddOneTimeGain} className="flex items-center gap-3 mb-4">
                         <input type="text" value={newOneTimeGainName} onChange={e => setNewOneTimeGainName(e.target.value)} placeholder="Ex: Bônus, Venda, etc." className="flex-grow p-2 bg-white border border-gray-300 rounded-md focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition" />
-                        <input type="number" value={newOneTimeGainValue} onChange={e => setNewOneTimeGainValue(e.target.value === '' ? '' : parseFloat(e.target.value))} placeholder="Valor (R$)" className="w-32 p-2 bg-white border border-gray-300 rounded-md focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition" />
+                        <input type="number" value={newOneTimeGainValue} onChange={e => setNewOneTimeGainValue(e.target.value)} placeholder="Valor (R$)" className="w-32 p-2 bg-white border border-gray-300 rounded-md focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition" />
                         <button type="submit" className="px-4 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors">Adicionar</button>
                     </form>
                     <div className="space-y-2">
@@ -373,6 +378,8 @@ const App: React.FC = () => {
                             id={`expense-${expense.id}`}
                             value={expense.value}
                             onChange={(e) => handleExpenseChange(expense.id, parseFloat(e.target.value) || 0)}
+                            onFocus={(e) => { if (e.target.value === '0') e.target.value = ''; }}
+                            onBlur={(e) => { if (e.target.value === '') handleExpenseChange(expense.id, 0); }}
                             className="w-full pl-9 pr-3 py-2 bg-white border border-gray-300 rounded-md focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
                             />
                         </div>
@@ -385,7 +392,7 @@ const App: React.FC = () => {
                     <h3 className="text-xl font-semibold mb-4">Despesas Pontuais</h3>
                     <form onSubmit={handleAddOneTimeExpense} className="flex items-center gap-3 mb-4">
                         <input type="text" value={newOneTimeName} onChange={e => setNewOneTimeName(e.target.value)} placeholder="Nome da despesa" className="flex-grow p-2 bg-white border border-gray-300 rounded-md focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition" />
-                        <input type="number" value={newOneTimeValue} onChange={e => setNewOneTimeValue(e.target.value === '' ? '' : parseFloat(e.target.value))} placeholder="Valor (R$)" className="w-32 p-2 bg-white border border-gray-300 rounded-md focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition" />
+                        <input type="number" value={newOneTimeValue} onChange={e => setNewOneTimeValue(e.target.value)} placeholder="Valor (R$)" className="w-32 p-2 bg-white border border-gray-300 rounded-md focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition" />
                         <button type="submit" className="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors">Adicionar</button>
                     </form>
                     <div className="space-y-2">
@@ -478,6 +485,13 @@ const App: React.FC = () => {
                 </div>
               </div>
 
+              <SavingsTipsCard 
+                totalIncome={totalIncome}
+                fixedExpenses={fixedExpenses}
+                oneTimeExpenses={oneTimeExpenses}
+                remainingBalance={remainingBalance}
+              />
+
               <div className="bg-white p-6 rounded-lg border border-gray-200 flex flex-col h-96">
                   <h2 className="text-2xl font-semibold mb-4">Distribuição</h2>
                   <div className="w-full flex-grow relative">
@@ -518,7 +532,14 @@ const App: React.FC = () => {
               </div>
               <div>
                 <label htmlFor="goal-amount" className="block text-sm font-medium text-gray-600 mb-1">Valor Total (R$)</label>
-                <input type="number" id="goal-amount" value={newGoalAmount} onChange={e => setNewGoalAmount(Number(e.target.value))} className="w-full p-2 bg-gray-100 border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md transition" />
+                <input 
+                  type="number" 
+                  id="goal-amount" 
+                  value={newGoalAmount} 
+                  onChange={e => setNewGoalAmount(parseFloat(e.target.value) || 0)}
+                  onFocus={(e) => { if (e.target.value === '0') e.target.value = ''; }}
+                  onBlur={(e) => { if (e.target.value === '') setNewGoalAmount(0); }}
+                  className="w-full p-2 bg-gray-100 border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md transition" />
               </div>
               <div>
                 <label htmlFor="goal-deadline" className="block text-sm font-medium text-gray-600 mb-1">Data Limite</label>

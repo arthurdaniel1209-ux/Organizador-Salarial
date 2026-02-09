@@ -86,3 +86,42 @@ export const AVAILABLE_ICONS: string[] = [
   '<i class="fa-solid fa-book"></i>',
   '<i class="fa-solid fa-gamepad"></i>',
 ];
+
+export const SAVINGS_TIPS = [
+  {
+    title: 'Regra dos 30 Dias',
+    description: 'Antes de fazer uma compra por impulso, espere 30 dias. Se ainda quiser o item após esse período, considere comprá-lo. Muitas vezes, o desejo desaparece.',
+  },
+  {
+    title: 'Planeje suas Refeições',
+    description: 'Dedique um tempo para planejar as refeições da semana. Isso ajuda a comprar apenas o necessário no supermercado, evitando desperdícios e gastos com delivery.',
+  },
+  {
+    title: 'Cancele Assinaturas Não Utilizadas',
+    description: 'Revise suas assinaturas mensais (streaming, apps, revistas). Cancele aquelas que você não usa com frequência. Pequenos valores somados fazem uma grande diferença.',
+  },
+  {
+    title: 'Automatize sua Poupança',
+    description: 'Configure uma transferência automática para sua conta de investimentos ou poupança assim que receber o salário. "Pague-se primeiro" e você se adaptará a viver com o restante.',
+  },
+  {
+    title: 'Use o Transporte Público',
+    description: 'Deixar o carro em casa uma ou duas vezes por semana pode economizar uma quantia significativa em combustível e manutenção ao longo do ano.',
+  },
+  {
+    title: 'Faça Você Mesmo (DIY)',
+    description: 'Aprenda a fazer pequenos reparos em casa ou a cozinhar aquele prato caro do restaurante. Além de economizar, você pode descobrir um novo hobby.',
+  },
+  {
+    title: 'Compare Preços Sempre',
+    description: 'Antes de qualquer compra, use comparadores de preço online ou pesquise em diferentes lojas. A diferença de valor pode ser surpreendente.',
+  },
+  {
+    title: 'Desconecte Aparelhos da Tomada',
+    description: 'Aparelhos em modo stand-by continuam consumindo energia. Desconectá-los quando não estão em uso pode reduzir sua conta de luz.',
+  },
+  {
+    title: 'Aproveite Programas de Fidelidade',
+    description: 'Cadastre-se nos programas de pontos e cashback. Com o tempo, eles podem gerar descontos significativos ou até produtos gratuitos.',
+  },
+];
