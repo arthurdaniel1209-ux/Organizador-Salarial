@@ -41,6 +41,7 @@ export interface Investment {
 }
 
 export interface UserData {
+  name: string;
   salary: number;
   password: string;
   fixedExpenses: Expense[];
@@ -50,4 +51,6 @@ export interface UserData {
   investments: Investment[];
   lastSavedMonth: number;
   previousMonthExpenses: number;
+  recoveryToken?: string;
+  recoveryTokenExpires?: number;
 }

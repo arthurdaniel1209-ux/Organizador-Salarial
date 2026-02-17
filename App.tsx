@@ -8,9 +8,13 @@ import BalanceProjectionChart from './components/BalanceProjectionChart';
 import IconPickerModal from './components/IconPickerModal';
 import SavingsTipsCard from './components/SavingsTipsCard';
 import Login from './components/Login';
+import PasswordReset from './components/PasswordReset';
 import { WalletIcon, MoneyBillIcon, BalanceIcon, ResetIcon, PlusIcon, CloseIcon, WarningIcon, PencilIcon, TrashIcon, LogoutIcon, CalendarIcon, InvestmentIcon, SunIcon, MoonIcon } from './components/icons';
 
+type ViewMode = 'APP' | 'LOGIN' | 'PASSWORD_RESET';
+
 const App: React.FC = () => {
+  const [name, setName] = useState<string>('');
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   
   const [salary, setSalary] = useState<number>(0);
@@ -53,8 +57,13 @@ const App: React.FC = () => {
   const [projectionPeriod, setProjectionPeriod] = useState<number>(6);
   const [isLoaded, setIsLoaded] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+  
+  const [viewMode, setViewMode] = useState<ViewMode>('LOGIN');
+  const [userToReset, setUserToReset] = useState<string | null>(null);
+  
 
   useEffect(() => {
+    // Theme setup
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
@@ -62,15 +71,53 @@ const App: React.FC = () => {
     }
     localStorage.setItem('theme', theme);
   }, [theme]);
+  
+  useEffect(() => {
+    // Check for password reset token on initial load
+    const urlParams = new URLSearchParams(window.location.search);
+    const resetToken = urlParams.get('reset-token');
+
+    if (resetToken) {
+      let foundUserEmail: string | null = null;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('budget_data_')) {
+          const userData: UserData = JSON.parse(localStorage.getItem(key)!);
+          if (userData.recoveryToken === resetToken) {
+            if (userData.recoveryTokenExpires && userData.recoveryTokenExpires > Date.now()) {
+              foundUserEmail = key.replace('budget_data_', '');
+            }
+            break;
+          }
+        }
+      }
+      
+      if (foundUserEmail) {
+        setUserToReset(foundUserEmail);
+        setViewMode('PASSWORD_RESET');
+      } else {
+        alert("Token de recuperação inválido ou expirado. Por favor, tente novamente.");
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setViewMode('LOGIN');
+      }
+    } else {
+       // Check for logged in user
+      const loggedInUser = localStorage.getItem('budget_app_currentUser');
+      if (loggedInUser) {
+        const data = localStorage.getItem(`budget_data_${loggedInUser}`);
+        if (data) {
+          handleLogin(loggedInUser, JSON.parse(data));
+        }
+      }
+    }
+    
+    // Animação de entrada
+    setIsLoaded(true);
+  }, []);
 
   const toggleTheme = () => {
     setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
   };
-
-  useEffect(() => {
-    // Animação de entrada
-    setIsLoaded(true);
-  }, []);
 
   const totalIncome = useMemo(() => {
     const totalGains = oneTimeGains.reduce((total, gain) => total + gain.value, 0);
@@ -95,6 +142,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (currentUser) {
       const dataToSave: UserData = {
+        name,
         salary,
         password,
         fixedExpenses,
@@ -107,7 +155,7 @@ const App: React.FC = () => {
       };
       localStorage.setItem(`budget_data_${currentUser}`, JSON.stringify(dataToSave));
     }
-  }, [salary, password, fixedExpenses, oneTimeExpenses, oneTimeGains, goals, investments, previousMonthExpenses, lastSavedMonth, currentUser]);
+  }, [name, salary, password, fixedExpenses, oneTimeExpenses, oneTimeGains, goals, investments, previousMonthExpenses, lastSavedMonth, currentUser]);
   
   useEffect(() => {
     if (!currentUser) return;
@@ -191,6 +239,7 @@ const App: React.FC = () => {
   };
   
   const resetBudget = useCallback(() => {
+    setName('');
     setSalary(0);
     setPassword('');
     setFixedExpenses(INITIAL_EXPENSES);
@@ -203,6 +252,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleLogin = (email: string, data: UserData) => {
+    setName(data.name || '');
     setSalary(data.salary);
     setPassword(data.password);
     setFixedExpenses(data.fixedExpenses);
@@ -214,11 +264,20 @@ const App: React.FC = () => {
     setPreviousMonthExpenses(data.previousMonthExpenses);
     setCurrentUser(email);
     localStorage.setItem('budget_app_currentUser', email);
+    setViewMode('APP');
+  };
+  
+  const handlePasswordResetSuccess = () => {
+    alert("Senha redefinida com sucesso! Por favor, faça login com sua nova senha.");
+    setViewMode('LOGIN');
+    setUserToReset(null);
+    window.history.replaceState({}, document.title, window.location.pathname);
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('budget_app_currentUser');
+    setViewMode('LOGIN');
     resetBudget();
   };
   
@@ -398,8 +457,11 @@ const App: React.FC = () => {
     return investment.amount * investmentYieldRate;
   };
 
-
-  if (!currentUser) {
+  if (viewMode === 'PASSWORD_RESET' && userToReset) {
+    return <PasswordReset userEmail={userToReset} onResetSuccess={handlePasswordResetSuccess} />;
+  }
+  
+  if (viewMode === 'LOGIN') {
     return <Login onLogin={handleLogin} />;
   }
 
@@ -418,7 +480,7 @@ const App: React.FC = () => {
               Organizador de Salário
             </h1>
             <p className="text-slate-500 dark:text-slate-400 mt-3 text-lg">
-              Bem-vindo, <span className="font-bold text-slate-700 dark:text-slate-200">{currentUser}</span>! Vamos organizar suas finanças.
+              Bem-vindo, <span className="font-bold text-slate-700 dark:text-slate-200">{name || currentUser}</span>! Vamos organizar suas finanças.
             </p>
           </header>
 
