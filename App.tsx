@@ -62,15 +62,13 @@ const App: React.FC = () => {
   
   const [viewMode, setViewMode] = useState<ViewMode>('LOADING');
 
-  // State for manual save
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const saveSuccessTimeoutRef = useRef<number | null>(null);
-  
+  const currentUserIdRef = useRef<string | null>(null);
   
   useEffect(() => {
-    // Theme setup
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
@@ -79,7 +77,6 @@ const App: React.FC = () => {
     localStorage.setItem('theme', theme);
   }, [theme]);
   
-  // Cleanup for the save success timeout
   useEffect(() => {
     return () => {
       if (saveSuccessTimeoutRef.current) {
@@ -97,7 +94,6 @@ const App: React.FC = () => {
       .single();
     
     if (data) {
-      // If user data exists, load it into the app's state
       setName(data.name || '');
       setSalary(data.salary);
       setFixedExpenses(data.fixed_expenses);
@@ -108,8 +104,6 @@ const App: React.FC = () => {
       setLastSavedMonth(data.last_saved_month);
       setPreviousMonthExpenses(data.previous_month_expenses);
     } else if (error && error.code === 'PGRST116') {
-      // PGRST116 means "No rows found". This is expected for a new user.
-      // We'll create their profile row in the database.
       const newUserName = user.user_metadata.full_name || user.email || 'Novo Usuário';
       
       const initialData = {
@@ -129,9 +123,7 @@ const App: React.FC = () => {
       
       if (insertError) {
         console.error("Error creating user profile:", insertError);
-        // Optionally, set an error state to show in the UI
       } else {
-        // After creating the profile, load the initial data into the state
         setName(initialData.name);
         setSalary(initialData.salary);
         setFixedExpenses(initialData.fixed_expenses);
@@ -143,7 +135,6 @@ const App: React.FC = () => {
         setPreviousMonthExpenses(initialData.previous_month_expenses);
       }
     } else if (error) { 
-      // Handle other unexpected errors
       console.error("Error fetching user data:", error);
     }
     setHasUnsavedChanges(false);
@@ -151,33 +142,41 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const supabase = getSupabase();
-    
-    setViewMode('LOADING');
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setViewMode('PASSWORD_RESET');
-        setIsLoaded(true);
-        return;
-      }
-      
-      if (session?.user) {
-        setCurrentUser(session.user);
-        await fetchUserData(session.user);
-        setViewMode('APP');
-      } else {
-        setCurrentUser(null);
-        setViewMode('LOGIN');
-        if (event === 'SIGNED_OUT') {
-          resetBudget();
+
+    const loadingTimeout = setTimeout(() => {
+        if (viewMode === 'LOADING') {
+            console.error("Authentication check timed out, defaulting to login screen.");
+            setViewMode('LOGIN');
+            setIsLoaded(true);
         }
-      }
-      
-      setIsLoaded(true);
+    }, 8000);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        clearTimeout(loadingTimeout);
+
+        if (session?.user) {
+            if (currentUserIdRef.current !== session.user.id) {
+                currentUserIdRef.current = session.user.id;
+                setCurrentUser(session.user);
+                await fetchUserData(session.user);
+            }
+            setViewMode('APP');
+        } else if (event === 'PASSWORD_RECOVERY') {
+            setViewMode('PASSWORD_RESET');
+        } else {
+            currentUserIdRef.current = null;
+            setCurrentUser(null);
+            setViewMode('LOGIN');
+            if (event === 'SIGNED_OUT') {
+                resetBudget();
+            }
+        }
+        setIsLoaded(true);
     });
 
     return () => {
-      subscription?.unsubscribe();
+        subscription?.unsubscribe();
+        clearTimeout(loadingTimeout);
     };
   }, []);
 
@@ -356,8 +355,6 @@ const App: React.FC = () => {
         console.error("Error logging out:", error);
         alert("Ocorreu um erro ao tentar sair. Por favor, verifique sua conexão e tente novamente.");
     } else {
-        // Explicitly update state to ensure UI reacts immediately,
-        // making the logout button feel responsive and reliable.
         setCurrentUser(null);
         setViewMode('LOGIN');
         resetBudget();
