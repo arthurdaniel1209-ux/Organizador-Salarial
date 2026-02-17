@@ -9,6 +9,7 @@ interface ProjectionData {
 
 interface BalanceProjectionChartProps {
   data: ProjectionData[];
+  theme: string;
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -19,8 +20,9 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     }).format(payload[0].value);
     
     return (
-      <div className="bg-white p-3 rounded-md shadow-lg border border-gray-200">
-        <p className="font-semibold text-gray-800">{`${label}: ${value}`}</p>
+      <div className="bg-white/80 backdrop-blur-sm dark:bg-slate-900/80 p-3 rounded-xl shadow-lg border border-slate-200/50 dark:border-slate-700/50">
+        <p className="font-bold text-slate-800 dark:text-slate-100">{label}</p>
+        <p className="text-slate-600 dark:text-slate-300">{value}</p>
       </div>
     );
   }
@@ -28,14 +30,16 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-const BalanceProjectionChart: React.FC<BalanceProjectionChartProps> = ({ data }) => {
+const BalanceProjectionChart: React.FC<BalanceProjectionChartProps> = ({ data, theme }) => {
   if (data.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-400">
+      <div className="flex items-center justify-center h-full text-slate-400">
         <p className="text-center text-sm">Seu saldo está negativo ou zerado. Ajuste o orçamento para ver a projeção.</p>
       </div>
     );
   }
+
+  const axisColor = theme === 'dark' ? '#94a3b8' : '#64748b'; // slate-400 : slate-500
 
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -48,13 +52,13 @@ const BalanceProjectionChart: React.FC<BalanceProjectionChartProps> = ({ data })
           bottom: 5,
         }}
       >
-        <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-        <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} stroke="#6b7280" />
+        <CartesianGrid strokeDasharray="3 3" stroke={axisColor} strokeOpacity={0.2} />
+        <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} stroke={axisColor} />
         <YAxis 
           fontSize={12} 
           tickLine={false} 
           axisLine={false}
-          stroke="#6b7280"
+          stroke={axisColor}
           tickFormatter={(value: number) => 
             new Intl.NumberFormat('pt-BR', {
               style: 'currency',
@@ -64,12 +68,12 @@ const BalanceProjectionChart: React.FC<BalanceProjectionChartProps> = ({ data })
             }).format(value)
           }
         />
-        <Tooltip cursor={{ fill: 'rgba(113, 113, 122, 0.1)' }} content={<CustomTooltip />} />
+        <Tooltip cursor={{ fill: 'rgba(34, 197, 94, 0.1)' }} content={<CustomTooltip />} />
         <Bar dataKey="saldo" fill="url(#colorSaldo)" radius={[4, 4, 0, 0]} animationDuration={800} />
         <defs>
           <linearGradient id="colorSaldo" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#22c55e" stopOpacity={0.8}/>
-            <stop offset="95%" stopColor="#16a34a" stopOpacity={0.4}/>
+            <stop offset="5%" stopColor="#22c55e" stopOpacity={0.9}/>
+            <stop offset="95%" stopColor="#16a34a" stopOpacity={0.5}/>
           </linearGradient>
         </defs>
       </BarChart>

@@ -10,6 +10,7 @@ interface ChartData {
 
 interface BudgetChartProps {
   data: ChartData[];
+  theme: string;
 }
 
 const CustomTooltip = ({ active, payload }: any) => {
@@ -21,8 +22,9 @@ const CustomTooltip = ({ active, payload }: any) => {
     }).format(data.value);
     
     return (
-      <div className="bg-white p-3 rounded-md shadow-lg border border-gray-200">
-        <p className="font-semibold text-gray-800">{`${data.name}: ${value}`}</p>
+      <div className="bg-white/80 backdrop-blur-sm dark:bg-slate-900/80 p-3 rounded-xl shadow-lg border border-slate-200/50 dark:border-slate-700/50">
+        <p className="font-bold text-slate-800 dark:text-slate-100">{data.name}</p>
+        <p className="text-slate-600 dark:text-slate-300">{value}</p>
       </div>
     );
   }
@@ -30,10 +32,10 @@ const CustomTooltip = ({ active, payload }: any) => {
   return null;
 };
 
-const BudgetChart: React.FC<BudgetChartProps> = ({ data }) => {
+const BudgetChart: React.FC<BudgetChartProps> = ({ data, theme }) => {
   if (data.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-400">
+      <div className="flex items-center justify-center h-full text-slate-400">
         <p>Adicione valores para ver o gráfico.</p>
       </div>
     );
@@ -47,18 +49,26 @@ const BudgetChart: React.FC<BudgetChartProps> = ({ data }) => {
           cx="50%"
           cy="50%"
           labelLine={false}
-          outerRadius="80%"
+          outerRadius="90%"
+          innerRadius="50%"
           fill="#8884d8"
           dataKey="value"
           nameKey="name"
-          stroke="none"
-          animationDuration={800}
+          strokeWidth={2}
+          stroke={theme === 'dark' ? "rgba(30, 41, 59, 0.5)" : "rgba(255,255,255,0.5)"}
+          paddingAngle={2}
+          animationDuration={1000}
         >
           {data.map((entry, index) => (
             <Cell key={`cell-${index}`} fill={entry.fill} />
           ))}
         </Pie>
-        <Legend iconSize={10} wrapperStyle={{fontSize: '12px', color: '#4b5563'}} />
+        <Legend 
+          iconType="circle" 
+          iconSize={10} 
+          wrapperStyle={{fontSize: '14px', paddingTop: '20px'}} 
+          formatter={(value, entry) => <span className="text-slate-600 dark:text-slate-300">{value}</span>}
+        />
       </PieChart>
     </ResponsiveContainer>
   );

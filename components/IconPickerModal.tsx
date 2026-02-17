@@ -29,19 +29,19 @@ const IconPickerModal: React.FC<IconPickerModalProps> = ({ isOpen, onClose, onSe
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg relative border border-gray-200">
-        <button onClick={handleClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 w-full max-w-lg relative transition-all transform scale-95 opacity-0 animate-scale-in" style={{animation: 'scaleIn 0.3s ease-out forwards'}}>
+        <button onClick={handleClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
           <CloseIcon />
         </button>
-        <h3 className="text-2xl font-bold mb-6 text-gray-800">Selecione um Ícone</h3>
+        <h3 className="text-2xl font-bold mb-6 text-slate-800 dark:text-slate-100">Selecione um Ícone</h3>
         
         <div className="grid grid-cols-6 sm:grid-cols-8 gap-4 max-h-64 overflow-y-auto pr-2">
           {icons.map((icon, index) => (
             <button 
               key={index} 
               onClick={() => setSelectedIcon(icon)}
-              className={`flex items-center justify-center text-xl p-3 rounded-md transition-all duration-200 ${selectedIcon === icon ? 'bg-blue-500 text-white ring-2 ring-blue-300' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              className={`flex items-center justify-center text-2xl p-3 rounded-xl transition-all duration-200 ${selectedIcon === icon ? 'bg-blue-500 text-white ring-4 ring-blue-300 dark:ring-blue-500/50' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'}`}
             >
               <span dangerouslySetInnerHTML={{ __html: icon }} />
             </button>
@@ -49,13 +49,13 @@ const IconPickerModal: React.FC<IconPickerModalProps> = ({ isOpen, onClose, onSe
         </div>
 
         <div className="mt-8 flex justify-end gap-3">
-          <button onClick={handleClose} className="px-4 py-2 rounded-lg bg-gray-200 text-gray-800 font-semibold hover:bg-gray-300 transition-colors">
+          <button onClick={handleClose} className="px-5 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-200 font-semibold hover:bg-slate-300 dark:hover:bg-slate-500 transition-all duration-300">
             Cancelar
           </button>
           <button 
             onClick={handleConfirm}
             disabled={!selectedIcon} 
-            className="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold hover:opacity-90 transition-all duration-300 transform hover:scale-105 disabled:bg-blue-300 disabled:cursor-not-allowed disabled:scale-100"
           >
             Confirmar
           </button>

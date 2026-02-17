@@ -50,15 +50,9 @@ export const INITIAL_EXPENSES: Expense[] = [
     type: AllocationType.FIXED,
     color: '#f59e0b', // amber-500
   },
-  {
-    id: '7',
-    name: 'Investimentos/Poupança',
-    icon: '<i class="fa-solid fa-piggy-bank"></i>',
-    value: 0,
-    type: AllocationType.FIXED,
-    color: '#84cc16', // lime-500
-  },
 ];
+
+export const CDI_ANNUAL_RATE = 0.104; // 10.40%
 
 export const AVAILABLE_ICONS: string[] = [
   '<i class="fa-solid fa-house-chimney"></i>',
@@ -85,6 +79,7 @@ export const AVAILABLE_ICONS: string[] = [
   '<i class="fa-solid fa-wifi"></i>',
   '<i class="fa-solid fa-book"></i>',
   '<i class="fa-solid fa-gamepad"></i>',
+  '<i class="fa-solid fa-chart-line"></i>',
 ];
 
 export const SAVINGS_TIPS = [
