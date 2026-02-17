@@ -1,5 +1,3 @@
-
-// FIX: Removed self-import which was causing declaration conflicts.
 export enum AllocationType {
   PERCENTAGE = 'PERCENTAGE',
   FIXED = 'FIXED',
@@ -40,17 +38,16 @@ export interface Investment {
   cdiPercentage: number;
 }
 
+// FIX: Add UserData interface to be used in App.tsx.
 export interface UserData {
   name: string;
   salary: number;
-  password: string;
-  fixedExpenses: Expense[];
-  oneTimeExpenses: OneTimeExpense[];
-  oneTimeGains: OneTimeGain[];
+  fixed_expenses: Expense[];
+  onetime_expenses: OneTimeExpense[];
+  onetime_gains: OneTimeGain[];
   goals: Goal[];
   investments: Investment[];
-  lastSavedMonth: number;
-  previousMonthExpenses: number;
-  recoveryToken?: string;
-  recoveryTokenExpires?: number;
+  last_saved_month: number;
+  previous_month_expenses: number;
+  password?: string;
 }

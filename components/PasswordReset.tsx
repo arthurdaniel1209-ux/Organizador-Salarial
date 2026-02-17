@@ -1,47 +1,47 @@
 
 import React, { useState } from 'react';
-import { UserData } from '../types';
+import { getSupabase } from '../supabaseClient';
 import { EyeIcon, EyeOffIcon } from './icons';
 
 interface PasswordResetProps {
-  userEmail: string;
   onResetSuccess: () => void;
 }
 
-const PasswordReset: React.FC<PasswordResetProps> = ({ userEmail, onResetSuccess }) => {
+const PasswordReset: React.FC<PasswordResetProps> = ({ onResetSuccess }) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setLoading(true);
     
     if (!password || !confirmPassword) {
       setError("Por favor, preencha todos os campos.");
+      setLoading(false);
       return;
     }
     
     if (password !== confirmPassword) {
       setError("As senhas não coincidem.");
+      setLoading(false);
       return;
     }
     
-    const userDataString = localStorage.getItem(`budget_data_${userEmail}`);
-    if (userDataString) {
-      const userData: UserData = JSON.parse(userDataString);
-      
-      userData.password = password;
-      delete userData.recoveryToken;
-      delete userData.recoveryTokenExpires;
-      
-      localStorage.setItem(`budget_data_${userEmail}`, JSON.stringify(userData));
-      onResetSuccess();
+    const supabase = getSupabase();
+    const { error: updateError } = await supabase.auth.updateUser({ password: password });
+
+    if (updateError) {
+      setError("Ocorreu um erro ao redefinir a senha. O link pode ter expirado.");
+      console.error("Password update error:", updateError);
     } else {
-      setError("Ocorreu um erro ao tentar redefinir a senha. Usuário não encontrado.");
+      onResetSuccess();
     }
+    setLoading(false);
   };
 
   return (
@@ -113,9 +113,10 @@ const PasswordReset: React.FC<PasswordResetProps> = ({ userEmail, onResetSuccess
             <div className="pt-2">
               <button
                 type="submit"
-                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-lg text-md font-bold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-300 transform hover:scale-105"
+                disabled={loading}
+                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-lg text-md font-bold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Salvar Nova Senha
+                {loading ? 'Salvando...' : 'Salvar Nova Senha'}
               </button>
             </div>
           </form>

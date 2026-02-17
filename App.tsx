@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { getSupabase } from './supabaseClient';
 import { INITIAL_EXPENSES, AVAILABLE_ICONS, CDI_ANNUAL_RATE } from './constants';
 import { Expense, AllocationType, Goal, OneTimeExpense, OneTimeGain, UserData, Investment } from './types';
 import BudgetChart from './components/BudgetChart';
@@ -10,15 +11,16 @@ import SavingsTipsCard from './components/SavingsTipsCard';
 import Login from './components/Login';
 import PasswordReset from './components/PasswordReset';
 import { WalletIcon, MoneyBillIcon, BalanceIcon, ResetIcon, PlusIcon, CloseIcon, WarningIcon, PencilIcon, TrashIcon, LogoutIcon, CalendarIcon, InvestmentIcon, SunIcon, MoonIcon } from './components/icons';
+import { User } from '@supabase/supabase-js';
 
-type ViewMode = 'APP' | 'LOGIN' | 'PASSWORD_RESET';
+
+type ViewMode = 'APP' | 'LOGIN' | 'PASSWORD_RESET' | 'LOADING';
 
 const App: React.FC = () => {
   const [name, setName] = useState<string>('');
-  const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   
   const [salary, setSalary] = useState<number>(0);
-  const [password, setPassword] = useState<string>('');
   const [fixedExpenses, setFixedExpenses] = useState<Expense[]>(INITIAL_EXPENSES);
   const [oneTimeExpenses, setOneTimeExpenses] = useState<OneTimeExpense[]>([]);
   const [oneTimeGains, setOneTimeGains] = useState<OneTimeGain[]>([]);
@@ -58,10 +60,9 @@ const App: React.FC = () => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
   
-  const [viewMode, setViewMode] = useState<ViewMode>('LOGIN');
-  const [userToReset, setUserToReset] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('LOADING');
   
-
+  
   useEffect(() => {
     // Theme setup
     if (theme === 'dark') {
@@ -72,47 +73,63 @@ const App: React.FC = () => {
     localStorage.setItem('theme', theme);
   }, [theme]);
   
-  useEffect(() => {
-    // Check for password reset token on initial load
-    const urlParams = new URLSearchParams(window.location.search);
-    const resetToken = urlParams.get('reset-token');
+  const fetchUserData = async (user: User) => {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from('user_data')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+    
+    if (data) {
+      setName(data.name || '');
+      setSalary(data.salary);
+      setFixedExpenses(data.fixed_expenses);
+      setOneTimeExpenses(data.onetime_expenses);
+      setOneTimeGains(data.onetime_gains);
+      setGoals(data.goals);
+      setInvestments(data.investments || []);
+      setLastSavedMonth(data.last_saved_month);
+      setPreviousMonthExpenses(data.previous_month_expenses);
+    }
+    if (error && error.code !== 'PGRST116') { // Ignore "No rows found" error on first login
+      console.error("Error fetching user data:", error);
+    }
+  };
 
-    if (resetToken) {
-      let foundUserEmail: string | null = null;
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('budget_data_')) {
-          const userData: UserData = JSON.parse(localStorage.getItem(key)!);
-          if (userData.recoveryToken === resetToken) {
-            if (userData.recoveryTokenExpires && userData.recoveryTokenExpires > Date.now()) {
-              foundUserEmail = key.replace('budget_data_', '');
-            }
-            break;
-          }
-        }
-      }
-      
-      if (foundUserEmail) {
-        setUserToReset(foundUserEmail);
-        setViewMode('PASSWORD_RESET');
+  useEffect(() => {
+    const supabase = getSupabase();
+    const getSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setCurrentUser(session.user);
+        await fetchUserData(session.user);
+        setViewMode('APP');
       } else {
-        alert("Token de recuperação inválido ou expirado. Por favor, tente novamente.");
-        window.history.replaceState({}, document.title, window.location.pathname);
         setViewMode('LOGIN');
       }
-    } else {
-       // Check for logged in user
-      const loggedInUser = localStorage.getItem('budget_app_currentUser');
-      if (loggedInUser) {
-        const data = localStorage.getItem(`budget_data_${loggedInUser}`);
-        if (data) {
-          handleLogin(loggedInUser, JSON.parse(data));
+    };
+    getSession();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN' && session?.user) {
+            setCurrentUser(session.user);
+            await fetchUserData(session.user);
+            setViewMode('APP');
+        } else if (event === 'SIGNED_OUT') {
+            setCurrentUser(null);
+            setViewMode('LOGIN');
+            resetBudget();
+        } else if (event === 'PASSWORD_RECOVERY') {
+            setViewMode('PASSWORD_RESET');
         }
-      }
-    }
-    
-    // Animação de entrada
+    });
+
     setIsLoaded(true);
+
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
   }, []);
 
   const toggleTheme = () => {
@@ -138,24 +155,41 @@ const App: React.FC = () => {
   const totalInvested = useMemo(() => {
     return investments.reduce((total, investment) => total + investment.amount, 0);
   }, [investments]);
+  
+  // Debounced save function
+  const debouncedSave = useCallback(
+    debounce(async (userData: User | null, dataToSave: Omit<UserData, 'password'>) => {
+      if (!userData) return;
+      const supabase = getSupabase();
+      const { error } = await supabase
+        .from('user_data')
+        .update({ ...dataToSave })
+        .eq('id', userData.id);
+
+      if (error) {
+        console.error("Error saving data:", error);
+      }
+    }, 1500),
+    []
+  );
 
   useEffect(() => {
-    if (currentUser) {
-      const dataToSave: UserData = {
+    if (currentUser && viewMode === 'APP') {
+      // FIX: Use snake_case for keys to match the database schema.
+      const dataToSave: Omit<UserData, 'password'> = {
         name,
         salary,
-        password,
-        fixedExpenses,
-        oneTimeExpenses,
-        oneTimeGains,
+        fixed_expenses: fixedExpenses,
+        onetime_expenses: oneTimeExpenses,
+        onetime_gains: oneTimeGains,
         goals,
         investments,
-        lastSavedMonth,
-        previousMonthExpenses,
+        last_saved_month: lastSavedMonth,
+        previous_month_expenses: previousMonthExpenses,
       };
-      localStorage.setItem(`budget_data_${currentUser}`, JSON.stringify(dataToSave));
+      debouncedSave(currentUser, dataToSave);
     }
-  }, [name, salary, password, fixedExpenses, oneTimeExpenses, oneTimeGains, goals, investments, previousMonthExpenses, lastSavedMonth, currentUser]);
+  }, [name, salary, fixedExpenses, oneTimeExpenses, oneTimeGains, goals, investments, previousMonthExpenses, lastSavedMonth, currentUser]);
   
   useEffect(() => {
     if (!currentUser) return;
@@ -165,7 +199,7 @@ const App: React.FC = () => {
       setPreviousMonthExpenses(totalExpenses);
       setLastSavedMonth(currentMonth);
     }
-  }, [currentUser, totalExpenses]);
+  }, [currentUser, totalExpenses, lastSavedMonth]);
 
 
   const formatCurrency = (value: number) => {
@@ -213,7 +247,7 @@ const App: React.FC = () => {
   const projectionData = useMemo(() => {
     if (finalBalance <= 0) return [];
     return Array.from({ length: projectionPeriod }, (_, i) => ({
-      name: `Mês ${i + 1}`,
+      name: `Mês ${'i' + 1}`,
       saldo: finalBalance * (i + 1),
     }));
   }, [finalBalance, projectionPeriod]);
@@ -242,7 +276,6 @@ const App: React.FC = () => {
   const resetBudget = useCallback(() => {
     setName('');
     setSalary(0);
-    setPassword('');
     setFixedExpenses(INITIAL_EXPENSES);
     setOneTimeExpenses([]);
     setOneTimeGains([]);
@@ -251,35 +284,16 @@ const App: React.FC = () => {
     setPreviousMonthExpenses(0);
     setLastSavedMonth(new Date().getMonth());
   }, []);
-
-  const handleLogin = (email: string, data: UserData) => {
-    setName(data.name || '');
-    setSalary(data.salary);
-    setPassword(data.password);
-    setFixedExpenses(data.fixedExpenses);
-    setOneTimeExpenses(data.oneTimeExpenses);
-    setOneTimeGains(data.oneTimeGains);
-    setGoals(data.goals);
-    setInvestments(data.investments || []);
-    setLastSavedMonth(data.lastSavedMonth);
-    setPreviousMonthExpenses(data.previousMonthExpenses);
-    setCurrentUser(email);
-    localStorage.setItem('budget_app_currentUser', email);
-    setViewMode('APP');
-  };
   
   const handlePasswordResetSuccess = () => {
     alert("Senha redefinida com sucesso! Por favor, faça login com sua nova senha.");
     setViewMode('LOGIN');
-    setUserToReset(null);
-    window.history.replaceState({}, document.title, window.location.pathname);
   };
 
-  const handleLogout = () => {
-    setCurrentUser(null);
-    localStorage.removeItem('budget_app_currentUser');
-    setViewMode('LOGIN');
-    resetBudget();
+  const handleLogout = async () => {
+    const supabase = getSupabase();
+    const { error } = await supabase.auth.signOut();
+    if(error) console.error("Error logging out:", error);
   };
   
   const handleAddGoal = () => {
@@ -457,13 +471,35 @@ const App: React.FC = () => {
     const investmentYieldRate = monthlyCdiRate * (investment.cdiPercentage / 100);
     return investment.amount * investmentYieldRate;
   };
+  
+  // Debounce helper function
+  function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
+    let timeout: ReturnType<typeof setTimeout> | null = null;
 
-  if (viewMode === 'PASSWORD_RESET' && userToReset) {
-    return <PasswordReset userEmail={userToReset} onResetSuccess={handlePasswordResetSuccess} />;
+    return (...args: Parameters<F>): Promise<ReturnType<F>> =>
+      new Promise(resolve => {
+        if (timeout) {
+          clearTimeout(timeout);
+        }
+
+        timeout = setTimeout(() => resolve(func(...args)), waitFor);
+      });
+  }
+
+  if (viewMode === 'LOADING') {
+    return (
+        <div className="min-h-screen flex justify-center items-center">
+            <p className="text-slate-500 dark:text-slate-400">Carregando...</p>
+        </div>
+    );
   }
   
-  if (viewMode === 'LOGIN') {
-    return <Login onLogin={handleLogin} />;
+  if (viewMode === 'PASSWORD_RESET') {
+    return <PasswordReset onResetSuccess={handlePasswordResetSuccess} />;
+  }
+  
+  if (viewMode === 'LOGIN' || !currentUser) {
+    return <Login />;
   }
 
   const getCardStyle = (delay: number) => ({
@@ -474,14 +510,14 @@ const App: React.FC = () => {
 
   return (
     <>
-      <div className="min-h-screen text-slate-800 dark:text-slate-300 p-4 sm:p-6 lg:p-8">
+      <div className="min-h-screen text-slate-800 dark:text-slate-300 p-4 sm:p-6 lg:p-8" data-testid="app-container">
         <div className="max-w-7xl mx-auto">
           <header className="text-center mb-10" style={getCardStyle(0)}>
             <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               Organizador de Salário
             </h1>
             <p className="text-slate-500 dark:text-slate-400 mt-3 text-lg">
-              Bem-vindo, <span className="font-bold text-slate-700 dark:text-slate-200">{name || currentUser}</span>! Vamos organizar suas finanças.
+              Bem-vindo, <span className="font-bold text-slate-700 dark:text-slate-200">{name || currentUser.email}</span>! Vamos organizar suas finanças.
             </p>
           </header>
 
@@ -498,15 +534,8 @@ const App: React.FC = () => {
                     {theme === 'light' ? <MoonIcon className="h-4 w-4" /> : <SunIcon className="h-4 w-4" />}
                   </button>
                   <button
-                    onClick={resetBudget}
-                    className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors p-2 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-700/50"
-                    aria-label="Resetar orçamento"
-                  >
-                    <ResetIcon />
-                    <span className="hidden sm:inline">Resetar</span>
-                  </button>
-                  <button
                     onClick={handleLogout}
+                    data-testid="logout-button"
                     className="flex items-center gap-2 text-sm text-red-500 hover:text-red-700 transition-colors p-2 rounded-lg hover:bg-red-100/50 dark:hover:bg-red-500/20"
                     aria-label="Sair da conta"
                   >
@@ -530,6 +559,7 @@ const App: React.FC = () => {
                       <input
                         type="number"
                         id="salary"
+                        data-testid="salary-input"
                         value={salary}
                         onChange={handleSalaryChange}
                         onFocus={(e) => { if (e.target.value === '0') e.target.value = ''; }}
@@ -542,18 +572,18 @@ const App: React.FC = () => {
                   <div>
                     <label className="block text-sm font-medium mb-2 text-slate-600 dark:text-slate-400">Ganhos Pontuais</label>
                     <form onSubmit={handleAddOneTimeGain} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-2">
-                        <input type="text" value={newOneTimeGainName} onChange={e => { setNewOneTimeGainName(e.target.value); if (oneTimeGainError) setOneTimeGainError(null); }} placeholder="Ex: Bônus, Venda, etc." className="flex-grow w-full sm:w-auto p-3 bg-white/80 dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-green-500 dark:focus:border-green-500 focus:ring-2 focus:ring-green-500/50 transition text-black dark:text-white" />
-                        <input type="number" value={newOneTimeGainValue} onChange={e => { setNewOneTimeGainValue(e.target.value); if (oneTimeGainError) setOneTimeGainError(null); }} placeholder="Valor (R$)" className="w-full sm:w-36 p-3 bg-white/80 dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-green-500 dark:focus:border-green-500 focus:ring-2 focus:ring-green-500/50 transition text-black dark:text-white" />
-                        <button type="submit" className="px-5 py-3 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700 transition-all duration-300 transform hover:scale-105 flex-shrink-0">Adicionar</button>
+                        <input type="text" data-testid="one-time-gain-name-input" value={newOneTimeGainName} onChange={e => { setNewOneTimeGainName(e.target.value); if (oneTimeGainError) setOneTimeGainError(null); }} placeholder="Ex: Bônus, Venda, etc." className="flex-grow w-full sm:w-auto p-3 bg-white/80 dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-green-500 dark:focus:border-green-500 focus:ring-2 focus:ring-green-500/50 transition text-black dark:text-white" />
+                        <input type="number" data-testid="one-time-gain-value-input" value={newOneTimeGainValue} onChange={e => { setNewOneTimeGainValue(e.target.value); if (oneTimeGainError) setOneTimeGainError(null); }} placeholder="Valor (R$)" className="w-full sm:w-36 p-3 bg-white/80 dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-green-500 dark:focus:border-green-500 focus:ring-2 focus:ring-green-500/50 transition text-black dark:text-white" />
+                        <button type="submit" data-testid="add-one-time-gain-button" className="px-5 py-3 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700 transition-all duration-300 transform hover:scale-105 flex-shrink-0">Adicionar</button>
                     </form>
                     {oneTimeGainError && <p className="text-sm text-red-600 dark:text-red-400 -mt-1 mb-4">{oneTimeGainError}</p>}
                     <div className="space-y-3">
                         {oneTimeGains.map(gain => (
-                            <div key={gain.id} className="flex justify-between items-center p-3 bg-green-500/10 dark:bg-green-500/20 rounded-lg">
+                            <div key={gain.id} data-testid={`one-time-gain-${gain.id}`} className="flex justify-between items-center p-3 bg-green-500/10 dark:bg-green-500/20 rounded-lg">
                                 <span className="dark:text-slate-200">{gain.name}</span>
                                 <div className="flex items-center gap-4">
                                     <span className="font-semibold dark:text-slate-100">{formatCurrency(gain.value)}</span>
-                                    <button onClick={() => handleDeleteOneTimeGain(gain.id)} className="text-slate-400 hover:text-red-500 transition-colors"><TrashIcon/></button>
+                                    <button onClick={() => handleDeleteOneTimeGain(gain.id)} data-testid={`delete-one-time-gain-${gain.id}`} className="text-slate-400 hover:text-red-500 transition-colors"><TrashIcon/></button>
                                 </div>
                             </div>
                         ))}
@@ -568,22 +598,22 @@ const App: React.FC = () => {
                   <form onSubmit={handleAddInvestment} className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-2 items-end">
                     <div className='sm:col-span-3'>
                       <label className="block text-sm font-medium mb-1 text-slate-600 dark:text-slate-400">Nome</label>
-                      <input type="text" value={newInvestmentName} onChange={e => { setNewInvestmentName(e.target.value); if(investmentError) setInvestmentError(null); }} placeholder="Ex: Tesouro Selic, CDB" className="w-full p-3 bg-white/80 dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-lime-500 dark:focus:border-lime-500 focus:ring-2 focus:ring-lime-500/50 transition text-black dark:text-white" />
+                      <input type="text" data-testid="investment-name-input" value={newInvestmentName} onChange={e => { setNewInvestmentName(e.target.value); if(investmentError) setInvestmentError(null); }} placeholder="Ex: Tesouro Selic, CDB" className="w-full p-3 bg-white/80 dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-lime-500 dark:focus:border-lime-500 focus:ring-2 focus:ring-lime-500/50 transition text-black dark:text-white" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1 text-slate-600 dark:text-slate-400">Valor Investido (R$)</label>
-                      <input type="number" value={newInvestmentAmount} onChange={e => { setNewInvestmentAmount(e.target.value); if(investmentError) setInvestmentError(null); }} placeholder="1000.00" className="w-full p-3 bg-white/80 dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-lime-500 dark:focus:border-lime-500 focus:ring-2 focus:ring-lime-500/50 transition text-black dark:text-white" />
+                      <input type="number" data-testid="investment-amount-input" value={newInvestmentAmount} onChange={e => { setNewInvestmentAmount(e.target.value); if(investmentError) setInvestmentError(null); }} placeholder="1000.00" className="w-full p-3 bg-white/80 dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-lime-500 dark:focus:border-lime-500 focus:ring-2 focus:ring-lime-500/50 transition text-black dark:text-white" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1 text-slate-600 dark:text-slate-400">Rendimento (% do CDI)</label>
-                      <input type="number" value={newInvestmentCdiPercentage} onChange={e => { setNewInvestmentCdiPercentage(e.target.value); if(investmentError) setInvestmentError(null); }} placeholder="100" className="w-full p-3 bg-white/80 dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-lime-500 dark:focus:border-lime-500 focus:ring-2 focus:ring-lime-500/50 transition text-black dark:text-white" />
+                      <input type="number" data-testid="investment-cdi-input" value={newInvestmentCdiPercentage} onChange={e => { setNewInvestmentCdiPercentage(e.target.value); if(investmentError) setInvestmentError(null); }} placeholder="100" className="w-full p-3 bg-white/80 dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-lime-500 dark:focus:border-lime-500 focus:ring-2 focus:ring-lime-500/50 transition text-black dark:text-white" />
                     </div>
-                    <button type="submit" className="px-5 py-3 rounded-xl bg-lime-600 text-white font-semibold hover:bg-lime-700 transition-all duration-300 transform hover:scale-105 flex-shrink-0 h-fit">Adicionar</button>
+                    <button type="submit" data-testid="add-investment-button" className="px-5 py-3 rounded-xl bg-lime-600 text-white font-semibold hover:bg-lime-700 transition-all duration-300 transform hover:scale-105 flex-shrink-0 h-fit">Adicionar</button>
                   </form>
                   {investmentError && <p className="text-sm text-red-600 dark:text-red-400 -mt-1 mb-4">{investmentError}</p>}
                   <div className="space-y-3">
                     {investments.map(inv => (
-                      <div key={inv.id} className="p-4 bg-lime-500/10 dark:bg-lime-500/20 rounded-lg">
+                      <div key={inv.id} data-testid={`investment-${inv.id}`} className="p-4 bg-lime-500/10 dark:bg-lime-500/20 rounded-lg">
                         <div className="flex justify-between items-start">
                           <div>
                             <p className="font-bold text-slate-800 dark:text-slate-100">{inv.name}</p>
@@ -594,7 +624,7 @@ const App: React.FC = () => {
                               <p className="text-xs text-slate-500 dark:text-slate-400">Rendimento/mês</p>
                            </div>
                         </div>
-                        <button onClick={() => handleDeleteInvestment(inv.id)} className="text-slate-400 hover:text-red-500 transition-colors mt-2"><TrashIcon/></button>
+                        <button onClick={() => handleDeleteInvestment(inv.id)} data-testid={`delete-investment-${inv.id}`} className="text-slate-400 hover:text-red-500 transition-colors mt-2"><TrashIcon/></button>
                       </div>
                     ))}
                   </div>
@@ -605,13 +635,13 @@ const App: React.FC = () => {
                 <div>
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="text-2xl font-bold dark:text-slate-100">Despesas Fixas</h3>
-                        <button onClick={handleAddFixedExpense} className="flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">
+                        <button onClick={handleAddFixedExpense} data-testid="add-fixed-expense-button" className="flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">
                             <PlusIcon /> Adicionar Categoria
                         </button>
                     </div>
                     <div className="space-y-4">
                     {fixedExpenses.map(expense => (
-                        <div key={expense.id} className="p-4 bg-slate-50/50 dark:bg-slate-900/30 rounded-xl">
+                        <div key={expense.id} data-testid={`fixed-expense-${expense.id}`} className="p-4 bg-slate-50/50 dark:bg-slate-900/30 rounded-xl">
                         <div className="flex justify-between items-center gap-2 mb-3 flex-wrap">
                             <div className="flex items-center gap-3 flex-grow min-w-[150px]">
                                 <button onClick={() => openIconModal(expense.id)} className="w-10 h-10 flex items-center justify-center text-slate-600 bg-white dark:bg-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors flex-shrink-0 shadow-sm">
@@ -625,7 +655,7 @@ const App: React.FC = () => {
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
                                 <button onClick={() => handleStartEditingName(expense)} className="text-slate-400 hover:text-slate-600 transition-colors"><PencilIcon /></button>
-                                <button onClick={() => handleDeleteFixedExpense(expense.id)} className="text-slate-400 hover:text-red-500 transition-colors"><TrashIcon /></button>
+                                <button onClick={() => handleDeleteFixedExpense(expense.id)} data-testid={`delete-fixed-expense-${expense.id}`} className="text-slate-400 hover:text-red-500 transition-colors"><TrashIcon /></button>
                                 <div className="flex items-center bg-slate-200 dark:bg-slate-700 rounded-full p-1">
                                 <button
                                     onClick={() => handleAllocationTypeChange(expense.id, AllocationType.FIXED)}
@@ -651,6 +681,7 @@ const App: React.FC = () => {
                             <input
                             type="number"
                             id={`expense-${expense.id}`}
+                            data-testid={`fixed-expense-input-${expense.id}`}
                             value={expense.value}
                             onChange={(e) => handleExpenseChange(expense.id, parseFloat(e.target.value) || 0)}
                             onFocus={(e) => { if (e.target.value === '0') e.target.value = ''; }}
@@ -666,18 +697,18 @@ const App: React.FC = () => {
                 <div>
                     <h3 className="text-2xl font-bold mb-4 dark:text-slate-100">Despesas Pontuais</h3>
                     <form onSubmit={handleAddOneTimeExpense} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-2">
-                        <input type="text" value={newOneTimeName} onChange={e => { setNewOneTimeName(e.target.value); if (oneTimeExpenseError) setOneTimeExpenseError(null); }} placeholder="Nome da despesa" className="flex-grow w-full sm:w-auto p-3 bg-white/80 dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50 transition text-black dark:text-white" />
-                        <input type="number" value={newOneTimeValue} onChange={e => { setNewOneTimeValue(e.target.value); if (oneTimeExpenseError) setOneTimeExpenseError(null); }} placeholder="Valor (R$)" className="w-full sm:w-36 p-3 bg-white/80 dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50 transition text-black dark:text-white" />
-                        <button type="submit" className="px-5 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold hover:opacity-90 transition-all duration-300 transform hover:scale-105 flex-shrink-0">Adicionar</button>
+                        <input type="text" data-testid="one-time-expense-name-input" value={newOneTimeName} onChange={e => { setNewOneTimeName(e.target.value); if (oneTimeExpenseError) setOneTimeExpenseError(null); }} placeholder="Nome da despesa" className="flex-grow w-full sm:w-auto p-3 bg-white/80 dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50 transition text-black dark:text-white" />
+                        <input type="number" data-testid="one-time-expense-value-input" value={newOneTimeValue} onChange={e => { setNewOneTimeValue(e.target.value); if (oneTimeExpenseError) setOneTimeExpenseError(null); }} placeholder="Valor (R$)" className="w-full sm:w-36 p-3 bg-white/80 dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50 transition text-black dark:text-white" />
+                        <button type="submit" data-testid="add-one-time-expense-button" className="px-5 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold hover:opacity-90 transition-all duration-300 transform hover:scale-105 flex-shrink-0">Adicionar</button>
                     </form>
                     {oneTimeExpenseError && <p className="text-sm text-red-600 dark:text-red-400 -mt-1 mb-4">{oneTimeExpenseError}</p>}
                     <div className="space-y-3">
                         {oneTimeExpenses.map(expense => (
-                            <div key={expense.id} className="flex justify-between items-center p-3 bg-slate-500/10 dark:bg-slate-500/20 rounded-lg">
+                            <div key={expense.id} data-testid={`one-time-expense-${expense.id}`} className="flex justify-between items-center p-3 bg-slate-500/10 dark:bg-slate-500/20 rounded-lg">
                                 <span className="dark:text-slate-200">{expense.name}</span>
                                 <div className="flex items-center gap-4">
                                     <span className="font-semibold dark:text-slate-100">{formatCurrency(expense.value)}</span>
-                                    <button onClick={() => handleDeleteOneTimeExpense(expense.id)} className="text-slate-400 hover:text-red-500 transition-colors"><TrashIcon/></button>
+                                    <button onClick={() => handleDeleteOneTimeExpense(expense.id)} data-testid={`delete-one-time-expense-${expense.id}`} className="text-slate-400 hover:text-red-500 transition-colors"><TrashIcon/></button>
                                 </div>
                             </div>
                         ))}
@@ -690,11 +721,11 @@ const App: React.FC = () => {
               <div className="bg-white/60 backdrop-blur-sm dark:bg-slate-800/60 p-6 rounded-2xl shadow-lg" style={getCardStyle(300)}>
                 <h2 className="text-2xl font-bold mb-4 dark:text-slate-100">Resumo Financeiro</h2>
                 <div className="space-y-4">
-                  <SummaryCard title="Renda Total Mensal" value={formatCurrency(totalIncome)} icon={<WalletIcon />} color="text-blue-500 dark:text-blue-400" bgColor="bg-blue-100/70 dark:bg-blue-900/30" />
-                  <SummaryCard title="Total Investido" value={formatCurrency(totalInvested)} icon={<InvestmentIcon />} color="text-lime-500 dark:text-lime-400" bgColor="bg-lime-100/70 dark:bg-lime-900/30" />
-                  <SummaryCard title="Total de Despesas" value={formatCurrency(totalExpenses)} icon={<MoneyBillIcon />} color="text-red-500 dark:text-red-400" bgColor="bg-red-100/70 dark:bg-red-900/30" />
-                  <SummaryCard title="Saldo Restante" value={formatCurrency(finalBalance)} icon={<BalanceIcon />} color={finalBalance >= 0 ? 'text-green-500 dark:text-green-400' : 'text-amber-500 dark:text-amber-400'} bgColor={finalBalance >= 0 ? 'bg-green-100/70 dark:bg-green-900/30' : 'bg-amber-100/70 dark:bg-amber-900/30'}/>
-                  <SummaryCard title="Gasto do Mês Anterior" value={formatCurrency(previousMonthExpenses)} icon={<CalendarIcon />} color="text-slate-500 dark:text-slate-400" bgColor="bg-slate-100/70 dark:bg-slate-700/30" />
+                  <SummaryCard data-testid="summary-total-income" title="Renda Total Mensal" value={formatCurrency(totalIncome)} icon={<WalletIcon />} color="text-blue-500 dark:text-blue-400" bgColor="bg-blue-100/70 dark:bg-blue-900/30" />
+                  <SummaryCard data-testid="summary-total-invested" title="Total Investido" value={formatCurrency(totalInvested)} icon={<InvestmentIcon />} color="text-lime-500 dark:text-lime-400" bgColor="bg-lime-100/70 dark:bg-lime-900/30" />
+                  <SummaryCard data-testid="summary-total-expenses" title="Total de Despesas" value={formatCurrency(totalExpenses)} icon={<MoneyBillIcon />} color="text-red-500 dark:text-red-400" bgColor="bg-red-100/70 dark:bg-red-900/30" />
+                  <SummaryCard data-testid="summary-final-balance" title="Saldo Restante" value={formatCurrency(finalBalance)} icon={<BalanceIcon />} color={finalBalance >= 0 ? 'text-green-500 dark:text-green-400' : 'text-amber-500 dark:text-amber-400'} bgColor={finalBalance >= 0 ? 'bg-green-100/70 dark:bg-green-900/30' : 'bg-amber-100/70 dark:bg-amber-900/30'}/>
+                  <SummaryCard data-testid="summary-previous-month-expenses" title="Gasto do Mês Anterior" value={formatCurrency(previousMonthExpenses)} icon={<CalendarIcon />} color="text-slate-500 dark:text-slate-400" bgColor="bg-slate-100/70 dark:bg-slate-700/30" />
                 </div>
               </div>
 

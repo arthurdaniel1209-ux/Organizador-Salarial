@@ -1,5 +1,16 @@
 {
   "name": "Organizador de Salário",
   "description": "Um aplicativo web para ajudar a organizar seu salário mensal, alocando fundos para diferentes categorias de despesas e visualizando seu orçamento.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "mcpServers": {
+    "TestSprite": {
+      "command": "npx",
+      "args": [
+        "@testsprite/testsprite-mcp@latest"
+      ],
+      "env": {
+        "API_KEY": "sk-user-AXDyAvl3ZIh8q3TV1-Mgpy-LIzUaHVdxh-W5CVNcrw8XxJYfDRKtaK7VQ940j3vifuVZg4kii0koa5OxFwFMc3iimzXM0JyK-8cqvWvmKcjyZsyFkaPrHUT6m3-fnBEeFUE"
+      }
+    }
+  }
 }

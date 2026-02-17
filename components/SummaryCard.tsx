@@ -7,11 +7,12 @@ interface SummaryCardProps {
   icon: React.ReactNode;
   color: string;
   bgColor: string;
+  'data-testid'?: string;
 }
 
-const SummaryCard: React.FC<SummaryCardProps> = ({ title, value, icon, color, bgColor }) => {
+const SummaryCard: React.FC<SummaryCardProps> = ({ title, value, icon, color, bgColor, 'data-testid': dataTestId }) => {
   return (
-    <div className={`flex items-center p-4 rounded-2xl ${bgColor} transition-all duration-300 hover:shadow-md hover:scale-[1.02]`}>
+    <div data-testid={dataTestId} className={`flex items-center p-4 rounded-2xl ${bgColor} transition-all duration-300 hover:shadow-md hover:scale-[1.02]`}>
       <div className={`p-3 rounded-xl mr-4 ${color}`}>
         {React.cloneElement(icon as React.ReactElement, { className: "h-8 w-8" })}
       </div>

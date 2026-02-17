@@ -121,7 +121,7 @@ const SavingsTipsCard: React.FC<SavingsTipsCardProps> = ({ totalIncome, fixedExp
   const currentTip = tips.length > 0 ? tips[currentTipIndex] : null;
 
   return (
-    <div className="bg-white/60 backdrop-blur-sm dark:bg-slate-800/60 p-6 rounded-2xl shadow-lg">
+    <div className="bg-white/60 backdrop-blur-sm dark:bg-slate-800/60 p-6 rounded-2xl shadow-lg" data-testid="ai-tip-card">
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center gap-3">
             <LightbulbIcon className="h-8 w-8 text-amber-500 dark:text-amber-400" />
@@ -141,7 +141,7 @@ const SavingsTipsCard: React.FC<SavingsTipsCardProps> = ({ totalIncome, fixedExp
           </div>
         )}
         {!loading && !error && currentTip && (
-           <div className="space-y-2 text-left">
+           <div className="space-y-2 text-left" data-testid="ai-tip-content">
               <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg">{currentTip.title}</h3>
               <p className="text-slate-600 dark:text-slate-300 text-base">{currentTip.description}</p>
           </div>
@@ -157,6 +157,7 @@ const SavingsTipsCard: React.FC<SavingsTipsCardProps> = ({ totalIncome, fixedExp
         <button
           onClick={generateTips}
           disabled={loading || totalIncome <= 0}
+          data-testid="generate-ai-tips-button"
           className="w-full px-5 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold hover:opacity-90 transition-all duration-300 transform hover:scale-105 disabled:bg-blue-300 disabled:cursor-not-allowed disabled:scale-100"
         >
           {loading ? 'Analisando...' : (tips.length > 0 ? 'Gerar Novas Dicas' : 'Analisar e Gerar Dicas')}
@@ -164,6 +165,7 @@ const SavingsTipsCard: React.FC<SavingsTipsCardProps> = ({ totalIncome, fixedExp
         {tips.length > 1 && !loading && (
           <button 
             onClick={showNextTip} 
+            data-testid="next-tip-button"
             className="flex-shrink-0 p-3 rounded-xl bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors transform hover:scale-105"
             aria-label="Ver próxima dica"
           >
