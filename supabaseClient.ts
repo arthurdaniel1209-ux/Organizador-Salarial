@@ -21,6 +21,15 @@ export const getSupabase = (): SupabaseClient => {
     throw new Error("As credenciais do Supabase não foram configuradas corretamente no arquivo supabaseClient.ts.");
   }
 
-  supabaseInstance = createClient(supabaseUrl, supabaseAnonKey);
+  // A configuração explícita de 'auth' é uma boa prática para o lado do cliente.
+  // Isso garante que a sessão seja persistida e atualizada corretamente.
+  // Para testes, o mais importante é desativar a "Confirmação de e-mail" no painel do Supabase.
+  supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false, // Importante para frameworks de página única (SPA)
+    },
+  });
   return supabaseInstance;
 };
