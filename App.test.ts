@@ -20,7 +20,8 @@ import { test, expect } from '@playwright/test';
  * 6.  Faz login com as credenciais do usuário recém-criado.
  * 7.  Verifica se os dados inseridos (como o salário) foram salvos e carregados corretamente.
  */
-test('Fluxo completo: cadastro, uso do app, logout e login', async (page) => {
+// FIX: Destructure the `page` object from the test arguments.
+test('Fluxo completo: cadastro, uso do app, logout e login', async ({ page }) => {
   // Gera um e-mail único para cada execução do teste para evitar conflitos de cadastro
   const testEmail = `testuser_${Date.now()}@example.com`;
   const testPassword = 'StrongPassword123!';

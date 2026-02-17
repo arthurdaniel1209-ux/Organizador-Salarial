@@ -82,6 +82,7 @@ const App: React.FC = () => {
       .single();
     
     if (data) {
+      // If user data exists, load it into the app's state
       setName(data.name || '');
       setSalary(data.salary);
       setFixedExpenses(data.fixed_expenses);
@@ -91,8 +92,43 @@ const App: React.FC = () => {
       setInvestments(data.investments || []);
       setLastSavedMonth(data.last_saved_month);
       setPreviousMonthExpenses(data.previous_month_expenses);
-    }
-    if (error && error.code !== 'PGRST116') { // Ignore "No rows found" error on first login
+    } else if (error && error.code === 'PGRST116') {
+      // PGRST116 means "No rows found". This is expected for a new user.
+      // We'll create their profile row in the database.
+      const newUserName = user.user_metadata.full_name || user.email || 'Novo Usuário';
+      
+      const initialData = {
+        id: user.id,
+        name: newUserName,
+        salary: 0,
+        fixed_expenses: INITIAL_EXPENSES,
+        onetime_expenses: [],
+        onetime_gains: [],
+        goals: [],
+        investments: [],
+        last_saved_month: new Date().getMonth(),
+        previous_month_expenses: 0,
+      };
+
+      const { error: insertError } = await supabase.from('user_data').insert(initialData);
+      
+      if (insertError) {
+        console.error("Error creating user profile:", insertError);
+        // Optionally, set an error state to show in the UI
+      } else {
+        // After creating the profile, load the initial data into the state
+        setName(initialData.name);
+        setSalary(initialData.salary);
+        setFixedExpenses(initialData.fixed_expenses);
+        setOneTimeExpenses(initialData.onetime_expenses);
+        setOneTimeGains(initialData.onetime_gains);
+        setGoals(initialData.goals);
+        setInvestments(initialData.investments);
+        setLastSavedMonth(initialData.last_saved_month);
+        setPreviousMonthExpenses(initialData.previous_month_expenses);
+      }
+    } else if (error) { 
+      // Handle other unexpected errors
       console.error("Error fetching user data:", error);
     }
   };

@@ -43,7 +43,8 @@ const Login: React.FC = () => {
     }
     
     const supabase = getSupabase();
-    const { data: { user }, error: signUpError } = await supabase.auth.signUp({
+    // Sign up the user
+    const { error: signUpError } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password: password,
         options: {
@@ -52,34 +53,21 @@ const Login: React.FC = () => {
             }
         }
     });
+    
+    setLoading(false);
 
     if (signUpError) {
-        setError(signUpError.message);
-        setLoading(false);
-        return;
-    }
-
-    if (user) {
-        const { error: insertError } = await supabase.from('user_data').insert({
-            id: user.id,
-            name: name.trim(),
-            salary: 0,
-            fixed_expenses: INITIAL_EXPENSES,
-            onetime_expenses: [],
-            onetime_gains: [],
-            goals: [],
-            investments: [],
-            last_saved_month: new Date().getMonth(),
-            previous_month_expenses: 0,
-        });
-
-        if (insertError) {
-            setError("Erro ao criar perfil de usuário. Tente novamente.");
-            console.error("Profile insert error:", insertError);
+        // Provide more specific feedback for a common error
+        if (signUpError.message.includes('User already registered')) {
+            setError('Este e-mail já está cadastrado. Tente fazer login.');
+        } else {
+            setError(signUpError.message);
         }
-        // Login will be handled by onAuthStateChange in App.tsx
+    } else {
+        // On success, inform the user to check their email.
+        // The profile will be created automatically on first login via the link.
+        setSuccess("Cadastro realizado! Verifique seu e-mail para ativar sua conta.");
     }
-    setLoading(false);
   }
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
