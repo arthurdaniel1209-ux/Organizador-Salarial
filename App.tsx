@@ -151,41 +151,33 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const supabase = getSupabase();
-    const getSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          setCurrentUser(session.user);
-          await fetchUserData(session.user);
-          setViewMode('APP');
-        } else {
-          setViewMode('LOGIN');
-        }
-      } catch (error) {
-        console.error("Error checking session:", error);
-        setViewMode('LOGIN');
-      } finally {
+    
+    setViewMode('LOADING');
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setViewMode('PASSWORD_RESET');
         setIsLoaded(true);
+        return;
       }
-    };
-    getSession();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' && session?.user) {
-            setCurrentUser(session.user);
-            await fetchUserData(session.user);
-            setViewMode('APP');
-        } else if (event === 'SIGNED_OUT') {
-            setCurrentUser(null);
-            setViewMode('LOGIN');
-            resetBudget();
-        } else if (event === 'PASSWORD_RECOVERY') {
-            setViewMode('PASSWORD_RESET');
+      
+      if (session?.user) {
+        setCurrentUser(session.user);
+        await fetchUserData(session.user);
+        setViewMode('APP');
+      } else {
+        setCurrentUser(null);
+        setViewMode('LOGIN');
+        if (event === 'SIGNED_OUT') {
+          resetBudget();
         }
+      }
+      
+      setIsLoaded(true);
     });
 
     return () => {
-      authListener?.subscription.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, []);
 
