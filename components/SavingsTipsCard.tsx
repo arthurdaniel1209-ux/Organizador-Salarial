@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { LightbulbIcon, ShuffleIcon } from './icons';
@@ -52,7 +53,7 @@ const SavingsTipsCard: React.FC<SavingsTipsCardProps> = ({ totalIncome, fixedExp
             ${formatFixedExpenses}
             - Despesas Pontuais:
             ${formatOneTimeExpenses}
-            - Saldo Restante: R$${remainingBalance.toFixed(2)}
+            - Saldo Disponível para Poupar/Investir: R$${remainingBalance.toFixed(2)}
         `;
 
         const schema = {

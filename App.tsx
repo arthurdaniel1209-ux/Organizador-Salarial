@@ -175,7 +175,8 @@ const App: React.FC = () => {
     }).format(value);
   };
 
-  const remainingBalance = useMemo(() => totalIncome - totalExpenses - totalInvested, [totalIncome, totalExpenses, totalInvested]);
+  const discretionaryIncome = useMemo(() => totalIncome - totalExpenses, [totalIncome, totalExpenses]);
+  const finalBalance = useMemo(() => discretionaryIncome - totalInvested, [discretionaryIncome, totalInvested]);
 
   const chartData = useMemo(() => {
     const fixedData = fixedExpenses.map(expense => ({
@@ -198,24 +199,24 @@ const App: React.FC = () => {
 
     const combinedData = [...fixedData, ...oneTimeData, investmentData];
 
-    if (remainingBalance > 0) {
+    if (finalBalance > 0) {
       combinedData.push({
         name: 'Sobra',
-        value: remainingBalance,
+        value: finalBalance,
         fill: '#22c55e',
       });
     }
 
     return combinedData.filter(d => d.value > 0);
-  }, [fixedExpenses, oneTimeExpenses, totalInvested, totalIncome, remainingBalance]);
+  }, [fixedExpenses, oneTimeExpenses, totalInvested, totalIncome, finalBalance]);
 
   const projectionData = useMemo(() => {
-    if (remainingBalance <= 0) return [];
+    if (finalBalance <= 0) return [];
     return Array.from({ length: projectionPeriod }, (_, i) => ({
       name: `Mês ${i + 1}`,
-      saldo: remainingBalance * (i + 1),
+      saldo: finalBalance * (i + 1),
     }));
-  }, [remainingBalance, projectionPeriod]);
+  }, [finalBalance, projectionPeriod]);
   
   const handleSalaryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(e.target.value) || 0;
@@ -692,7 +693,7 @@ const App: React.FC = () => {
                   <SummaryCard title="Renda Total Mensal" value={formatCurrency(totalIncome)} icon={<WalletIcon />} color="text-blue-500 dark:text-blue-400" bgColor="bg-blue-100/70 dark:bg-blue-900/30" />
                   <SummaryCard title="Total Investido" value={formatCurrency(totalInvested)} icon={<InvestmentIcon />} color="text-lime-500 dark:text-lime-400" bgColor="bg-lime-100/70 dark:bg-lime-900/30" />
                   <SummaryCard title="Total de Despesas" value={formatCurrency(totalExpenses)} icon={<MoneyBillIcon />} color="text-red-500 dark:text-red-400" bgColor="bg-red-100/70 dark:bg-red-900/30" />
-                  <SummaryCard title="Saldo Restante" value={formatCurrency(remainingBalance)} icon={<BalanceIcon />} color={remainingBalance >= 0 ? 'text-green-500 dark:text-green-400' : 'text-amber-500 dark:text-amber-400'} bgColor={remainingBalance >= 0 ? 'bg-green-100/70 dark:bg-green-900/30' : 'bg-amber-100/70 dark:bg-amber-900/30'}/>
+                  <SummaryCard title="Saldo Restante" value={formatCurrency(finalBalance)} icon={<BalanceIcon />} color={finalBalance >= 0 ? 'text-green-500 dark:text-green-400' : 'text-amber-500 dark:text-amber-400'} bgColor={finalBalance >= 0 ? 'bg-green-100/70 dark:bg-green-900/30' : 'bg-amber-100/70 dark:bg-amber-900/30'}/>
                   <SummaryCard title="Gasto do Mês Anterior" value={formatCurrency(previousMonthExpenses)} icon={<CalendarIcon />} color="text-slate-500 dark:text-slate-400" bgColor="bg-slate-100/70 dark:bg-slate-700/30" />
                 </div>
               </div>
@@ -765,7 +766,7 @@ const App: React.FC = () => {
                   totalIncome={totalIncome}
                   fixedExpenses={fixedExpenses}
                   oneTimeExpenses={oneTimeExpenses}
-                  remainingBalance={remainingBalance}
+                  remainingBalance={discretionaryIncome}
                 />
               </div>
 
