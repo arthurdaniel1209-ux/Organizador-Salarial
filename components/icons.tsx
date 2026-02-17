@@ -113,3 +113,29 @@ export const MoonIcon: React.FC<IconProps> = ({ className = "h-6 w-6" }) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
   </svg>
 );
+
+export const SaveIcon: React.FC<IconProps> = ({ className = "h-5 w-5" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3l-4 4-4-4z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 7V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3" />
+  </svg>
+);
+
+export const CheckIcon: React.FC<IconProps> = ({ className = "h-5 w-5" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+);
+
+export const SpinnerIcon: React.FC<IconProps> = ({ className = "h-5 w-5 animate-spin" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 3v3m0 12v3m9-9h-3M6 12H3m14.485-6.485l-2.122 2.122M8.637 15.363l-2.122 2.122m10.849 0l-2.122-2.122M8.637 8.637L6.515 6.515" />
+  </svg>
+);
+
+export const BarChartIcon: React.FC<IconProps> = ({ className = "h-16 w-16" }) => (
+    <svg className={className} strokeWidth="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" color="currentColor">
+        <path d="M20 20H4V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
+        <path d="M18 17v-8M13 17v-5M8 17v-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
+    </svg>
+);

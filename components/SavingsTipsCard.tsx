@@ -45,7 +45,7 @@ const SavingsTipsCard: React.FC<SavingsTipsCardProps> = ({ totalIncome, fixedExp
             : "Nenhuma despesa pontual.";
 
         const userPrompt = `
-            Analise os seguintes dados financeiros e gere 3 dicas de economia personalizadas, curtas e acionáveis. As dicas devem ser relevantes para a situação financeira. Por exemplo, se os gastos com 'Lazer' são altos, sugira alternativas mais baratas. Se o saldo restante é baixo, dê dicas para economizar em despesas essenciais. Se o saldo for alto, sugira como investir melhor.
+            Analise os seguintes dados financeiros e gere 3 dicas de economia personalizadas, curtas e acionáveis, em português do Brasil. As dicas devem ser relevantes para a situação financeira. Por exemplo, se os gastos com 'Lazer' são altos, sugira alternativas mais baratas. Se o saldo restante é baixo, dê dicas para economizar em despesas essenciais. Se o saldo for alto, sugira como investir melhor.
 
             Dados Financeiros:
             - Renda Mensal Total: R$${totalIncome.toFixed(2)}
@@ -78,27 +78,24 @@ const SavingsTipsCard: React.FC<SavingsTipsCardProps> = ({ totalIncome, fixedExp
             model: 'gemini-3-flash-preview',
             contents: userPrompt,
             config: {
-                systemInstruction: "Você é um consultor financeiro para usuários no Brasil. Sua resposta deve ser exclusivamente um objeto JSON, seguindo o schema fornecido, sem nenhum texto, comentários ou formatação markdown adicional.",
+                systemInstruction: "Você é um consultor financeiro para usuários no Brasil. Sua resposta deve ser APENAS o objeto JSON que corresponde ao schema fornecido, sem nenhum texto, comentários ou formatação markdown.",
                 responseMimeType: 'application/json',
                 responseSchema: schema,
             },
         });
 
-        // FIX: The `text` property on the response object should be accessed directly, not called as a function.
         const textResponse = response.text;
         if (!textResponse) {
             throw new Error("A IA não retornou uma resposta de texto.");
         }
 
-        let jsonText = textResponse.trim();
-        // Remove markdown fences if the model adds them by mistake
-        if (jsonText.startsWith("```json")) {
-            jsonText = jsonText.slice(7, -3).trim();
-        } else if (jsonText.startsWith("```")) {
-            jsonText = jsonText.slice(3, -3).trim();
+        // More robust JSON parsing: Find the JSON block within the response text.
+        const jsonMatch = textResponse.match(/{[\s\S]*}/);
+        if (!jsonMatch || !jsonMatch[0]) {
+             throw new Error("Não foi possível encontrar um objeto JSON válido na resposta da IA.");
         }
         
-        const parsedJson = JSON.parse(jsonText);
+        const parsedJson = JSON.parse(jsonMatch[0]);
         
         if (parsedJson.tips && parsedJson.tips.length > 0) {
             setTips(parsedJson.tips);
@@ -108,6 +105,7 @@ const SavingsTipsCard: React.FC<SavingsTipsCardProps> = ({ totalIncome, fixedExp
         }
 
     } catch (e) {
+        console.error("Erro ao gerar dicas:", e);
         setError("Ocorreu um erro ao gerar as dicas. Verifique sua conexão ou tente mais tarde.");
     } finally {
         setLoading(false);

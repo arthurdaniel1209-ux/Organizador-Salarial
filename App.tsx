@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { getSupabase } from './supabaseClient';
 import { INITIAL_EXPENSES, AVAILABLE_ICONS, CDI_ANNUAL_RATE } from './constants';
 import { Expense, AllocationType, Goal, OneTimeExpense, OneTimeGain, UserData, Investment } from './types';
@@ -10,7 +10,7 @@ import IconPickerModal from './components/IconPickerModal';
 import SavingsTipsCard from './components/SavingsTipsCard';
 import Login from './components/Login';
 import PasswordReset from './components/PasswordReset';
-import { WalletIcon, MoneyBillIcon, BalanceIcon, ResetIcon, PlusIcon, CloseIcon, WarningIcon, PencilIcon, TrashIcon, LogoutIcon, CalendarIcon, InvestmentIcon, SunIcon, MoonIcon } from './components/icons';
+import { WalletIcon, MoneyBillIcon, BalanceIcon, ResetIcon, PlusIcon, CloseIcon, WarningIcon, PencilIcon, TrashIcon, LogoutIcon, CalendarIcon, InvestmentIcon, SunIcon, MoonIcon, SaveIcon, CheckIcon, SpinnerIcon } from './components/icons';
 import { User } from '@supabase/supabase-js';
 
 
@@ -61,6 +61,12 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
   
   const [viewMode, setViewMode] = useState<ViewMode>('LOADING');
+
+  // State for manual save
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
+  const saveSuccessTimeoutRef = useRef<number | null>(null);
   
   
   useEffect(() => {
@@ -73,6 +79,15 @@ const App: React.FC = () => {
     localStorage.setItem('theme', theme);
   }, [theme]);
   
+  // Cleanup for the save success timeout
+  useEffect(() => {
+    return () => {
+      if (saveSuccessTimeoutRef.current) {
+        clearTimeout(saveSuccessTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const fetchUserData = async (user: User) => {
     const supabase = getSupabase();
     const { data, error } = await supabase
@@ -131,18 +146,26 @@ const App: React.FC = () => {
       // Handle other unexpected errors
       console.error("Error fetching user data:", error);
     }
+    setHasUnsavedChanges(false);
   };
 
   useEffect(() => {
     const supabase = getSupabase();
     const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setCurrentUser(session.user);
-        await fetchUserData(session.user);
-        setViewMode('APP');
-      } else {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setCurrentUser(session.user);
+          await fetchUserData(session.user);
+          setViewMode('APP');
+        } else {
+          setViewMode('LOGIN');
+        }
+      } catch (error) {
+        console.error("Error checking session:", error);
         setViewMode('LOGIN');
+      } finally {
+        setIsLoaded(true);
       }
     };
     getSession();
@@ -161,8 +184,6 @@ const App: React.FC = () => {
         }
     });
 
-    setIsLoaded(true);
-
     return () => {
       authListener?.subscription.unsubscribe();
     };
@@ -170,6 +191,45 @@ const App: React.FC = () => {
 
   const toggleTheme = () => {
     setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+  };
+
+  const handleSave = async () => {
+    if (!currentUser) return;
+    setIsSaving(true);
+    setSaveSuccess(false);
+
+    const dataToSave: Omit<UserData, 'password'> = {
+        name,
+        salary,
+        fixed_expenses: fixedExpenses,
+        onetime_expenses: oneTimeExpenses,
+        onetime_gains: oneTimeGains,
+        goals,
+        investments,
+        last_saved_month: lastSavedMonth,
+        previous_month_expenses: previousMonthExpenses,
+    };
+
+    const supabase = getSupabase();
+    const { error } = await supabase
+        .from('user_data')
+        .update({ ...dataToSave })
+        .eq('id', currentUser.id);
+
+    setIsSaving(false);
+    if (error) {
+        console.error("Error saving data:", error);
+        alert("Erro ao salvar os dados. Tente novamente.");
+    } else {
+        setHasUnsavedChanges(false);
+        setSaveSuccess(true);
+        if (saveSuccessTimeoutRef.current) {
+            clearTimeout(saveSuccessTimeoutRef.current);
+        }
+        saveSuccessTimeoutRef.current = window.setTimeout(() => {
+            setSaveSuccess(false);
+        }, 2000);
+    }
   };
 
   const totalIncome = useMemo(() => {
@@ -192,41 +252,6 @@ const App: React.FC = () => {
     return investments.reduce((total, investment) => total + investment.amount, 0);
   }, [investments]);
   
-  // Debounced save function
-  const debouncedSave = useCallback(
-    debounce(async (userData: User | null, dataToSave: Omit<UserData, 'password'>) => {
-      if (!userData) return;
-      const supabase = getSupabase();
-      const { error } = await supabase
-        .from('user_data')
-        .update({ ...dataToSave })
-        .eq('id', userData.id);
-
-      if (error) {
-        console.error("Error saving data:", error);
-      }
-    }, 1500),
-    []
-  );
-
-  useEffect(() => {
-    if (currentUser && viewMode === 'APP') {
-      // FIX: Use snake_case for keys to match the database schema.
-      const dataToSave: Omit<UserData, 'password'> = {
-        name,
-        salary,
-        fixed_expenses: fixedExpenses,
-        onetime_expenses: oneTimeExpenses,
-        onetime_gains: oneTimeGains,
-        goals,
-        investments,
-        last_saved_month: lastSavedMonth,
-        previous_month_expenses: previousMonthExpenses,
-      };
-      debouncedSave(currentUser, dataToSave);
-    }
-  }, [name, salary, fixedExpenses, oneTimeExpenses, oneTimeGains, goals, investments, previousMonthExpenses, lastSavedMonth, currentUser]);
-  
   useEffect(() => {
     if (!currentUser) return;
     
@@ -234,6 +259,7 @@ const App: React.FC = () => {
     if (lastSavedMonth !== currentMonth) {
       setPreviousMonthExpenses(totalExpenses);
       setLastSavedMonth(currentMonth);
+      setHasUnsavedChanges(true);
     }
   }, [currentUser, totalExpenses, lastSavedMonth]);
 
@@ -283,7 +309,7 @@ const App: React.FC = () => {
   const projectionData = useMemo(() => {
     if (finalBalance <= 0) return [];
     return Array.from({ length: projectionPeriod }, (_, i) => ({
-      name: `Mês ${'i' + 1}`,
+      name: `Mês ${i + 1}`,
       saldo: finalBalance * (i + 1),
     }));
   }, [finalBalance, projectionPeriod]);
@@ -291,6 +317,7 @@ const App: React.FC = () => {
   const handleSalaryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(e.target.value) || 0;
     setSalary(value);
+    setHasUnsavedChanges(true);
   };
 
   const handleExpenseChange = (id: string, value: number) => {
@@ -299,6 +326,7 @@ const App: React.FC = () => {
         expense.id === id ? { ...expense, value: value } : expense
       )
     );
+    setHasUnsavedChanges(true);
   };
 
   const handleAllocationTypeChange = (id: string, type: AllocationType) => {
@@ -307,6 +335,7 @@ const App: React.FC = () => {
         expense.id === id ? { ...expense, type, value: 0 } : expense
       )
     );
+    setHasUnsavedChanges(true);
   };
   
   const resetBudget = useCallback(() => {
@@ -319,6 +348,7 @@ const App: React.FC = () => {
     setInvestments([]);
     setPreviousMonthExpenses(0);
     setLastSavedMonth(new Date().getMonth());
+    setHasUnsavedChanges(true);
   }, []);
   
   const handlePasswordResetSuccess = () => {
@@ -329,7 +359,17 @@ const App: React.FC = () => {
   const handleLogout = async () => {
     const supabase = getSupabase();
     const { error } = await supabase.auth.signOut();
-    if(error) console.error("Error logging out:", error);
+    
+    if (error) {
+        console.error("Error logging out:", error);
+        alert("Ocorreu um erro ao tentar sair. Por favor, verifique sua conexão e tente novamente.");
+    } else {
+        // Explicitly update state to ensure UI reacts immediately,
+        // making the logout button feel responsive and reliable.
+        setCurrentUser(null);
+        setViewMode('LOGIN');
+        resetBudget();
+    }
   };
   
   const handleAddGoal = () => {
@@ -340,7 +380,8 @@ const App: React.FC = () => {
         targetAmount: newGoalAmount,
         deadline: newGoalDeadline,
       };
-      setGoals([...goals, newGoal]);
+      setGoals(prev => [...prev, newGoal]);
+      setHasUnsavedChanges(true);
       setIsGoalModalOpen(false);
       setNewGoalName('');
       setNewGoalAmount(1000);
@@ -379,6 +420,7 @@ const App: React.FC = () => {
     setFixedExpenses(prev => prev.map(exp => 
       exp.id === editingExpenseId ? { ...exp, icon: newIcon } : exp
     ));
+    setHasUnsavedChanges(true);
     closeIconModal();
   };
 
@@ -391,11 +433,13 @@ const App: React.FC = () => {
       type: AllocationType.FIXED,
       color: '#71717a',
     };
-    setFixedExpenses([...fixedExpenses, newExpense]);
+    setFixedExpenses(prev => [...prev, newExpense]);
+    setHasUnsavedChanges(true);
   };
 
   const handleDeleteFixedExpense = (id: string) => {
-    setFixedExpenses(fixedExpenses.filter(exp => exp.id !== id));
+    setFixedExpenses(prev => prev.filter(exp => exp.id !== id));
+    setHasUnsavedChanges(true);
   };
   
   const handleStartEditingName = (expense: Expense) => {
@@ -404,7 +448,8 @@ const App: React.FC = () => {
   };
   
   const handleSaveName = (id: string) => {
-    setFixedExpenses(fixedExpenses.map(exp => exp.id === id ? {...exp, name: editingNameValue} : exp));
+    setFixedExpenses(prev => prev.map(exp => exp.id === id ? {...exp, name: editingNameValue} : exp));
+    setHasUnsavedChanges(true);
     setEditingNameId(null);
     setEditingNameValue('');
   };
@@ -430,13 +475,15 @@ const App: React.FC = () => {
         name: newOneTimeName,
         value: numericValue,
     };
-    setOneTimeExpenses([...oneTimeExpenses, newExpense]);
+    setOneTimeExpenses(prev => [...prev, newExpense]);
+    setHasUnsavedChanges(true);
     setNewOneTimeName('');
     setNewOneTimeValue('');
   };
 
   const handleDeleteOneTimeExpense = (id: string) => {
-    setOneTimeExpenses(oneTimeExpenses.filter(exp => exp.id !== id));
+    setOneTimeExpenses(prev => prev.filter(exp => exp.id !== id));
+    setHasUnsavedChanges(true);
   };
   
   const handleAddOneTimeGain = (e: React.FormEvent) => {
@@ -460,13 +507,15 @@ const App: React.FC = () => {
         name: newOneTimeGainName,
         value: numericValue,
     };
-    setOneTimeGains([...oneTimeGains, newGain]);
+    setOneTimeGains(prev => [...prev, newGain]);
+    setHasUnsavedChanges(true);
     setNewOneTimeGainName('');
     setNewOneTimeGainValue('');
   };
 
   const handleDeleteOneTimeGain = (id: string) => {
-    setOneTimeGains(oneTimeGains.filter(gain => gain.id !== id));
+    setOneTimeGains(prev => prev.filter(gain => gain.id !== id));
+    setHasUnsavedChanges(true);
   };
 
   const handleAddInvestment = (e: React.FormEvent) => {
@@ -492,14 +541,16 @@ const App: React.FC = () => {
       amount: amount,
       cdiPercentage: cdi,
     };
-    setInvestments([...investments, newInvestment]);
+    setInvestments(prev => [...prev, newInvestment]);
+    setHasUnsavedChanges(true);
     setNewInvestmentName('');
     setNewInvestmentAmount('');
     setNewInvestmentCdiPercentage('100');
   };
 
   const handleDeleteInvestment = (id: string) => {
-    setInvestments(investments.filter(inv => inv.id !== id));
+    setInvestments(prev => prev.filter(inv => inv.id !== id));
+    setHasUnsavedChanges(true);
   };
   
   const calculateMonthlyYield = (investment: Investment): number => {
@@ -508,21 +559,7 @@ const App: React.FC = () => {
     return investment.amount * investmentYieldRate;
   };
   
-  // Debounce helper function
-  function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
-    let timeout: ReturnType<typeof setTimeout> | null = null;
-
-    return (...args: Parameters<F>): Promise<ReturnType<F>> =>
-      new Promise(resolve => {
-        if (timeout) {
-          clearTimeout(timeout);
-        }
-
-        timeout = setTimeout(() => resolve(func(...args)), waitFor);
-      });
-  }
-
-  if (viewMode === 'LOADING') {
+  if (viewMode === 'LOADING' || !isLoaded) {
     return (
         <div className="min-h-screen flex justify-center items-center">
             <p className="text-slate-500 dark:text-slate-400">Carregando...</p>
@@ -544,6 +581,32 @@ const App: React.FC = () => {
     transform: isLoaded ? 'translateY(0)' : 'translateY(20px)',
   });
 
+  const getSaveButtonClasses = () => {
+    if (isSaving) {
+      return "bg-yellow-500/80";
+    }
+    if (saveSuccess) {
+      return "bg-green-500";
+    }
+    if (hasUnsavedChanges) {
+      return "bg-blue-600 hover:bg-blue-700";
+    }
+    return "bg-slate-400/80 dark:bg-slate-500/80 cursor-default";
+  };
+  
+  const getSaveButtonText = () => {
+    if (isSaving) return "Salvando...";
+    if (saveSuccess) return "Salvo!";
+    if (hasUnsavedChanges) return "Salvar Alterações";
+    return "Salvo";
+  };
+
+  const getSaveButtonIcon = () => {
+    if (isSaving) return <SpinnerIcon />;
+    if (saveSuccess) return <CheckIcon />;
+    return <SaveIcon />;
+  };
+
   return (
     <>
       <div className="min-h-screen text-slate-800 dark:text-slate-300 p-4 sm:p-6 lg:p-8" data-testid="app-container">
@@ -559,8 +622,18 @@ const App: React.FC = () => {
 
           <main className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 bg-white/60 backdrop-blur-sm dark:bg-slate-800/60 p-6 sm:p-8 rounded-2xl shadow-lg" style={getCardStyle(200)}>
-              <div className="flex justify-between items-center mb-8">
-                <h2 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Seu Orçamento</h2>
+              <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
+                <div className="flex items-center gap-4">
+                  <h2 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Seu Orçamento</h2>
+                  <button
+                      onClick={handleSave}
+                      disabled={!hasUnsavedChanges || isSaving}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-white font-semibold text-sm transition-all duration-300 ${getSaveButtonClasses()}`}
+                    >
+                      {getSaveButtonIcon()}
+                      {getSaveButtonText()}
+                  </button>
+                </div>
                 <div className="flex items-center gap-2 sm:gap-4">
                   <button
                     onClick={toggleTheme}
